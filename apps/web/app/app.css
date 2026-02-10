@@ -1,0 +1,92 @@
+@import "tailwindcss" source(".");
+
+@theme {
+  /* Typography */
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "Fira Mono", "JetBrains Mono", monospace;
+
+  /* Colors - Dark Theme (Default) */
+  --color-sx-bg: #0A0A0A;
+  --color-sx-bg-elevated: #141414;
+  --color-sx-bg-hover: #1A1A1A;
+  --color-sx-bg-nested: #222222;
+  --color-sx-fg: #FAFAFA;
+  --color-sx-fg-muted: #888888;
+  --color-sx-fg-subtle: #555555;
+  --color-sx-border: #222222;
+  --color-sx-border-hover: #333333;
+
+  /* Accent */
+  --color-sx-accent: #00E5A0;
+  --color-sx-accent-hover: #00CC8E;
+  --color-sx-accent-muted: rgba(0, 229, 160, 0.12);
+  --color-sx-warning: #F5A623;
+  --color-sx-error: #EF4444;
+  --color-sx-info: #3B82F6;
+
+  /* Phase Colors */
+  --color-phase-planning: #3B82F6;
+  --color-phase-planning-bg: rgba(59, 130, 246, 0.08);
+  --color-phase-impl: #8B5CF6;
+  --color-phase-impl-bg: rgba(139, 92, 246, 0.08);
+  --color-phase-testing: #10B981;
+  --color-phase-testing-bg: rgba(16, 185, 129, 0.08);
+  --color-phase-security: #F59E0B;
+  --color-phase-security-bg: rgba(245, 158, 11, 0.08);
+  --color-phase-devops: #EC4899;
+  --color-phase-devops-bg: rgba(236, 72, 153, 0.08);
+
+  /* Rating Tiers */
+  --color-tier-s: #FFD700;
+  --color-tier-a: #00E5A0;
+  --color-tier-b: #3B82F6;
+  --color-tier-c: #888888;
+}
+
+/* Base styles */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-sx-bg);
+  color: var(--color-sx-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus ring utility */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-sx-accent-muted);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-sx-border-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-sx-fg-subtle);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
