@@ -79,7 +79,7 @@ export default function SkillDetail() {
     );
   };
 
-  const installCmd = data.skill.install_command || `npx skillx install ${data.skill.slug}`;
+  const installCmd = data.skill.install_command || `npx skillx-sh use ${data.skill.slug}`;
 
   return (
     <PageContainer>

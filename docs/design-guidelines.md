@@ -150,7 +150,7 @@ Layout: flex items-center justify-between px-4 gap-6
 - Description in `text-xl` to `text-3xl`, muted color, leading-tight
 - Command box: dark elevated surface with mono text + copy button
   ```
-  $ npx skillx search "deploy to cloudflare"
+  $ npx skillx-sh search "deploy to cloudflare"
   ```
 - Stats row: total skills count, total installs, agents supported
 
@@ -169,7 +169,7 @@ Content:
 - **Description:** 2 lines max, truncated with ellipsis
 - **Tags:** Pill badges with category colors (phase-based)
 - **Footer row:** Install count + rating (S/A/B/C tier) + compatibility icons
-- **Action:** "Install" button or `npx skillx use <name>` copyable
+- **Action:** "Install" button or `npx skillx-sh use <name>` copyable
 
 ### Leaderboard Table (from skills.sh)
 

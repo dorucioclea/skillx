@@ -176,10 +176,11 @@ skillx/
 
 **Usage:**
 ```bash
-npx skillx search "data processing"
-npx skillx use skillx-search skillx-email
-npx skillx config set SKILLX_API_KEY sk_...
-npx skillx report --outcome success --duration 1234
+npm install -g skillx-sh
+skillx search "data processing"
+skillx use skillx-search skillx-email
+skillx config set SKILLX_API_KEY sk_...
+skillx report --outcome success --duration 1234
 ```
 
 ## Data Flow Diagrams (ASCII)

@@ -107,7 +107,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <p className="mb-1.5 text-left font-mono text-xs text-sx-fg-muted">
               Then use it:
             </p>
-            <CommandBox command='npx skillx use "deploy to cloudflare" --search' />
+            <CommandBox command='npx skillx-sh use "deploy to cloudflare" --search' />
           </div>
         </div>
 

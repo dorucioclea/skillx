@@ -23,7 +23,7 @@ export function SkillCard({
   rating,
 }: SkillCardProps) {
   const [copied, setCopied] = useState(false);
-  const installCommand = `npx skillx install ${slug}`;
+  const installCommand = `npx skillx-sh use ${slug}`;
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();

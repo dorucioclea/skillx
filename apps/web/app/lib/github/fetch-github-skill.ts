@@ -122,7 +122,7 @@ export async function fetchGitHubSkill(
     author: repoData.owner.login,
     source_url: repoData.html_url,
     category: inferCategory(repoData.topics || []),
-    install_command: `npx skillx use ${owner}/${repo}`,
+    install_command: `npx skillx-sh use ${owner}/${repo}`,
     github_stars: repoData.stargazers_count,
   };
 }

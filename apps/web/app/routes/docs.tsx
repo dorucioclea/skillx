@@ -35,9 +35,9 @@ export default function Docs() {
               Install SkillX globally or run it directly with npx.
             </p>
             <div className="space-y-3">
-              <CommandBox command="npm install -g skillx" />
+              <CommandBox command="npm install -g skillx-sh" />
               <p className="text-center text-xs text-sx-fg-subtle">or use without installing:</p>
-              <CommandBox command="npx skillx --help" />
+              <CommandBox command="npx skillx-sh --help" />
             </div>
           </div>
 

@@ -22,20 +22,23 @@ cd apps/web && pnpm dev
 ### CLI Tool
 
 ```bash
+# Install globally
+npm install -g skillx-sh
+
 # Search for skills
-npx skillx search "data processing"
+skillx search "data processing"
 
 # Use a skill
-npx skillx use skillx-search
+skillx use skillx-search
 
 # Search and use in one command
-npx skillx use "data processing" --search
+skillx use "data processing" --search
 
 # Report execution result
-npx skillx report --outcome success --duration 1234
+skillx report --outcome success --duration 1234
 
 # Configure API key
-npx skillx config set SKILLX_API_KEY sk_prod_...
+skillx config set SKILLX_API_KEY sk_prod_...
 ```
 
 ## What is SkillX?
