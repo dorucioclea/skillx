@@ -3,8 +3,8 @@ import { PageContainer } from "../components/layout/page-container";
 import { SkillCard } from "../components/skill-card";
 import { User } from "lucide-react";
 import { getDb } from "~/lib/db";
-import { favorites, skills } from "~/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { favorites, skills, usageStats } from "~/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { getSession } from "~/lib/auth/session-helpers";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -12,24 +12,43 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await getSession(request, env);
 
   if (!session?.user) {
-    return { user: null, favoriteSkills: [] };
+    return { user: null, favoriteSkills: [], usageHistory: [] };
   }
 
   const db = getDb(env.DB);
-  const userFavorites = await db
-    .select()
-    .from(favorites)
-    .innerJoin(skills, eq(favorites.skill_id, skills.id))
-    .where(eq(favorites.user_id, session.user.id));
+
+  const [userFavorites, userUsage] = await Promise.all([
+    db
+      .select()
+      .from(favorites)
+      .innerJoin(skills, eq(favorites.skill_id, skills.id))
+      .where(eq(favorites.user_id, session.user.id)),
+    db
+      .select({
+        id: usageStats.id,
+        skillName: skills.name,
+        skillSlug: skills.slug,
+        outcome: usageStats.outcome,
+        model: usageStats.model,
+        duration_ms: usageStats.duration_ms,
+        created_at: usageStats.created_at,
+      })
+      .from(usageStats)
+      .innerJoin(skills, eq(usageStats.skill_id, skills.id))
+      .where(eq(usageStats.user_id, session.user.id))
+      .orderBy(desc(usageStats.created_at))
+      .limit(50),
+  ]);
 
   return {
     user: session.user,
     favoriteSkills: userFavorites.map((f) => f.skills),
+    usageHistory: userUsage,
   };
 }
 
 export default function Profile({ loaderData }: Route.ComponentProps) {
-  const { user, favoriteSkills } = loaderData;
+  const { user, favoriteSkills, usageHistory } = loaderData;
   const isAuthenticated = !!user;
 
   if (!isAuthenticated) {
@@ -106,9 +125,77 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
       {/* Usage History */}
       <div className="mb-8">
         <h2 className="mb-4 font-mono text-lg font-semibold">Usage History</h2>
-        <div className="rounded-lg border border-sx-border bg-sx-bg-elevated p-8 text-center">
-          <p className="text-sx-fg-muted">No usage history available.</p>
-        </div>
+        {usageHistory.length > 0 ? (
+          <div className="overflow-hidden rounded-lg border border-sx-border">
+            <table className="w-full">
+              <thead className="bg-sx-bg-elevated">
+                <tr className="border-b border-sx-border">
+                  <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+                    Skill
+                  </th>
+                  <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+                    Outcome
+                  </th>
+                  <th className="hidden px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted sm:table-cell">
+                    Model
+                  </th>
+                  <th className="hidden px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted md:table-cell">
+                    Duration
+                  </th>
+                  <th className="px-4 py-3 text-right font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageHistory.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    className="border-b border-sx-border last:border-0"
+                  >
+                    <td className="px-4 py-3">
+                      <a
+                        href={`/skills/${entry.skillSlug}`}
+                        className="font-medium text-sx-accent hover:underline"
+                      >
+                        {entry.skillName}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          entry.outcome === "success"
+                            ? "bg-green-500/10 text-green-400"
+                            : entry.outcome === "failure"
+                              ? "bg-red-500/10 text-red-400"
+                              : "bg-yellow-500/10 text-yellow-400"
+                        }`}
+                      >
+                        {entry.outcome}
+                      </span>
+                    </td>
+                    <td className="hidden px-4 py-3 text-sm text-sx-fg-muted sm:table-cell">
+                      {entry.model || "—"}
+                    </td>
+                    <td className="hidden px-4 py-3 text-sm text-sx-fg-muted md:table-cell">
+                      {entry.duration_ms ? `${entry.duration_ms}ms` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-sx-fg-muted">
+                      {new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      }).format(new Date(entry.created_at))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-sx-border bg-sx-bg-elevated p-8 text-center">
+            <p className="text-sx-fg-muted">No usage history yet.</p>
+          </div>
+        )}
       </div>
     </PageContainer>
   );

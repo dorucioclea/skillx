@@ -87,7 +87,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </pre>
 
         <p className="mt-4 font-mono text-xs uppercase tracking-wide text-sx-fg-muted sm:text-sm">
-          The Skills Marketplace for AI Agents
+          Search & Use Skills Without Installing Anything
         </p>
 
         <p className="mt-6 text-xl text-sx-fg sm:text-2xl">
@@ -95,7 +95,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </p>
 
         <div className="mx-auto mt-8 max-w-lg">
-          <CommandBox command='npx skillx search "deploy to cloudflare"' />
+          <CommandBox command='npx skillx use "deploy to cloudflare" --search' />
         </div>
 
         {/* Stats Row */}

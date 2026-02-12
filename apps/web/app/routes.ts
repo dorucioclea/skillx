@@ -5,6 +5,7 @@ export default [
   route("skills/:slug", "routes/skill-detail.tsx"),
   route("profile", "routes/profile.tsx"),
   route("settings", "routes/settings.tsx"),
+  route("docs", "routes/docs.tsx"),
   route("api/auth/*", "routes/auth-catchall.tsx"),
   route("api/search", "routes/api.search.ts"),
   route("api/admin/seed", "routes/api.admin.seed.ts"),
