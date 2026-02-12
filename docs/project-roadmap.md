@@ -81,8 +81,8 @@ MVP launched with all foundational features:
 ## Phase 3: Skill Discovery & Execution
 
 **Status:** Planned
-**Duration:** 6-8 weeks
-**Goals:** MCP server mode, skill marketplace discovery, sandbox execution
+**Duration:** 7-9 weeks
+**Goals:** MCP server mode, skill marketplace discovery, sandbox execution, references & scripts
 
 ### Milestones
 
@@ -113,7 +113,20 @@ npx skillx-mcp-server
 - [ ] Cache radar charts (30 min TTL)
 - [ ] Display skill verification badge
 
-#### 3.4 Skill Publishing Workflow (Weeks 6-8)
+#### 3.4 Skill References & Scripts (Weeks 6-7)
+- [ ] Add `references` JSON column to skills table (array of `{title, url, type}`)
+- [ ] Add `scripts` JSON column to skills table (array of `{name, command, description}`)
+- [ ] D1 migration (ALTER TABLE, not recreate)
+- [ ] Update seed pipeline to fetch/store references & scripts from SkillsMP
+- [ ] API: return references & scripts in skill detail endpoint
+- [ ] API: allow creators to CRUD references & scripts on their skills
+- [ ] UI: render references list on skill detail page (with icons by type: docs, repo, api, video)
+- [ ] UI: render scripts section with copy-to-clipboard buttons
+- [ ] CLI: `skillx info <slug>` shows references & scripts
+- [ ] Search: index reference titles in FTS5 for keyword discoverability
+- [ ] Validation: sanitize URLs, limit array size (max 20 refs, 10 scripts)
+
+#### 3.5 Skill Publishing Workflow (Weeks 7-9)
 - [ ] Creator dashboard (publish new skill)
 - [ ] SKILL.md validation
 - [ ] Auto-generate skill card
@@ -125,6 +138,8 @@ npx skillx-mcp-server
 - [ ] 10+ skills successfully published
 - [ ] Sandbox execution <5s per skill
 - [ ] Radar charts loading & caching
+- [ ] References & scripts displayed on skill detail pages
+- [ ] CLI `skillx info` shows references & scripts
 
 ---
 
