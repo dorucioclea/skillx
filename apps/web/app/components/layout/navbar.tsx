@@ -43,6 +43,20 @@ export function Navbar() {
 
           {/* Right Side */}
           <div className="flex items-center gap-3">
+            {/* Desktop nav links */}
+            <Link
+              to="/docs"
+              className="hidden text-sm text-sx-fg-muted transition-colors hover:text-sx-fg md:block"
+            >
+              Docs
+            </Link>
+            <Link
+              to="/settings"
+              className="hidden text-sm text-sx-fg-muted transition-colors hover:text-sx-fg md:block"
+            >
+              Settings
+            </Link>
+
             {/* Mobile search */}
             <button
               onClick={() => setSearchOpen(true)}
@@ -71,6 +85,13 @@ export function Navbar() {
         {mobileMenuOpen && (
           <div className="border-t border-sx-border bg-sx-bg-elevated md:hidden">
             <div className="flex flex-col space-y-1 px-4 py-3">
+              <Link
+                to="/docs"
+                onClick={() => setMobileMenuOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm text-sx-fg-muted transition-colors hover:bg-sx-bg-hover hover:text-sx-fg"
+              >
+                Docs
+              </Link>
               <Link
                 to="/profile"
                 onClick={() => setMobileMenuOpen(false)}

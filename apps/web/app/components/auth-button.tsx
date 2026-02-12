@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+import { LogOut } from "lucide-react";
 import { signIn, signOut, useSession } from "~/lib/auth/auth-client";
 
 export function AuthButton() {
@@ -27,14 +29,19 @@ export function AuthButton() {
   if (session) {
     return (
       <div className="flex items-center gap-4">
-        <span className="text-sm text-sx-fg-muted">
+        <Link
+          to="/profile"
+          className="text-sm text-sx-fg-muted transition-colors hover:text-sx-fg"
+        >
           {session.user.name || session.user.email}
-        </span>
+        </Link>
         <button
           onClick={() => signOut()}
-          className="rounded-lg bg-sx-bg-muted px-4 py-2 text-sm text-sx-fg hover:bg-sx-bg-hover"
+          className="rounded-lg p-2 text-sx-fg-muted transition-colors hover:text-red-400"
+          aria-label="Sign Out"
+          title="Sign Out"
         >
-          Sign Out
+          <LogOut size={16} />
         </button>
       </div>
     );
