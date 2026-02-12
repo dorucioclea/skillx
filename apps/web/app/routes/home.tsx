@@ -115,7 +115,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
           <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
             <div className="font-mono text-3xl font-bold text-sx-accent">
-              {stats.skillCount}+
+              {formatNumber(stats.skillCount)}+
             </div>
             <div className="mt-1 text-sm text-sx-fg-muted">Total Skills</div>
           </div>

@@ -31,6 +31,7 @@ scripts/scraped-skills.json
 scripts/.fetch-progress.json
 scripts/.fetch-all-progress.json
 scripts/.seed-progress.json
+scripts/.content-fetch-progress.json
 scripts/seed-data.json
 scripts/seed-batches/
 
