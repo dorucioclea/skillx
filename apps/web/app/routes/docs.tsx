@@ -1,4 +1,5 @@
 import { PageContainer } from "../components/layout/page-container";
+import { DocsSubNav } from "../components/docs/docs-sub-nav";
 import { CommandBox } from "../components/command-box";
 import { BookOpen, Terminal, Key, BarChart3, Settings, Search, Compass } from "lucide-react";
 import type { MetaFunction } from "react-router";
@@ -11,6 +12,8 @@ export const meta: MetaFunction = () => [
 export default function Docs() {
   return (
     <PageContainer>
+      <DocsSubNav />
+
       <div className="mb-8">
         <h1 className="font-mono text-3xl font-bold">Documentation</h1>
         <p className="mt-2 text-sx-fg-muted">

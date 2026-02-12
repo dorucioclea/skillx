@@ -6,6 +6,7 @@ export default [
   route("profile", "routes/profile.tsx"),
   route("settings", "routes/settings.tsx"),
   route("docs", "routes/docs.tsx"),
+  route("docs/api", "routes/docs-api.tsx"),
   route("leaderboard", "routes/leaderboard.tsx"),
   route("api/auth/*", "routes/auth-catchall.tsx"),
   route("api/search", "routes/api.search.ts"),
