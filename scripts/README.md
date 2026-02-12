@@ -1,105 +1,123 @@
 # Data Seeding Scripts
 
-This directory contains scripts for seeding the SkillX database with initial skill data.
+Scripts for fetching, transforming, and seeding skill data into the SkillX database.
 
 ## Files
 
-- **seed-data.json**: Contains 30 curated AI agent skills across various categories
-- **seed-skills.mjs**: Node.js script to POST seed data to the admin API
-- **seed-skills.ts**: TypeScript version (for reference)
+| Script | Purpose |
+|--------|---------|
+| `fetch-skillsmp-skills.mjs` | Fetch skills from SkillsMP API (single query, up to 5K) |
+| `fetch-skillsmp-all.mjs` | Fetch ALL skills via multi-query strategy (130K+) |
+| `build-seed-data.mjs` | Add manually curated skills to seed data |
+| `seed-skills.mjs` | Seed skills to the SkillX API in batches (resumable) |
+| `seed-data.json` | Combined seed data (~133K skills) |
+| `seed-batches/` | Split batch files (1K skills each, 134 files) |
+
+## Workflow
+
+```
+SkillsMP API ──► fetch-skillsmp-skills.mjs ──► seed-data.json ◄── build-seed-data.mjs (manual)
+             ──► fetch-skillsmp-all.mjs    ──┘       │
+                                                     ├──► split into seed-batches/*.json (1K each)
+                                                     ▼
+                                              seed-skills.mjs ──► /api/admin/seed ──► D1 + Vectorize
+```
 
 ## Usage
 
-### Prerequisites
-
-1. Ensure the web app is running locally or deployed
-2. Set the `ADMIN_SECRET` environment variable (must match `env.ADMIN_SECRET` in wrangler.jsonc)
-
-### Local Development
+### 1. Fetch skills from SkillsMP
 
 ```bash
-# Start the dev server
-pnpm dev
-
-# In another terminal, run the seed script
-ADMIN_SECRET=your-secret-here pnpm seed
+SKILLSMP_API_KEY=sk_live_... node scripts/fetch-skillsmp-skills.mjs
+SKILLSMP_API_KEY=sk_live_... node scripts/fetch-skillsmp-skills.mjs --reset  # start fresh
 ```
 
-### Custom API URL
+- Fetches up to 5,000 skills (100/page, 50 pages max)
+- Resumable: saves progress to `.fetch-progress.json` after each page
+- Merges new skills into `seed-data.json` (existing slugs preserved)
+- Maps GitHub stars → `github_stars` (not `install_count`)
+
+### 2. Add curated skills manually
+
+Edit `build-seed-data.mjs` to add skills, then run:
 
 ```bash
-API_URL=https://your-deployed-app.com ADMIN_SECRET=your-secret pnpm seed
+node scripts/build-seed-data.mjs
 ```
+
+### 3. Fetch ALL skills (multi-query)
+
+```bash
+SKILLSMP_API_KEY=sk_live_... node scripts/fetch-skillsmp-all.mjs
+SKILLSMP_API_KEY=sk_live_... node scripts/fetch-skillsmp-all.mjs --reset
+```
+
+- Uses ~100+ keyword queries to bypass the 5K-per-query API cap
+- Deduplicates across queries by skill ID
+- Resumable: saves progress to `.fetch-all-progress.json`
+- Fetched 133K+ unique skills in last run
+
+### 4. Seed to database
+
+```bash
+# From seed-data.json (default)
+ADMIN_SECRET=xxx API_URL=https://skillx.sh node scripts/seed-skills.mjs
+
+# From batch files (recommended for large datasets)
+ADMIN_SECRET=xxx API_URL=https://skillx.sh node scripts/seed-skills.mjs --from-batches
+ADMIN_SECRET=xxx API_URL=https://skillx.sh node scripts/seed-skills.mjs --file=5        # single batch
+ADMIN_SECRET=xxx API_URL=https://skillx.sh node scripts/seed-skills.mjs --range=6-134   # range of batches
+
+# Options
+--reset         Clear progress, seed all from scratch
+--batch=N       Skills per batch sent to API (default: 50)
+--skip-vectors  Skip Vectorize embedding (faster, backfill later)
+--from-batches  Read from seed-batches/*.json instead of seed-data.json
+--file=N        Seed only batch file N (e.g. --file=5 → batch-005.json)
+--range=A-B     Seed batch files A through B (e.g. --range=6-134)
+```
+
+- Resumable: saves progress to `.seed-progress.json`
+- Re-run without `--reset` to continue from last checkpoint
+- Batch files: 134 files × 1K skills each in `seed-batches/`
 
 ## How It Works
 
-1. **seed-skills.mjs** reads `seed-data.json`
-2. POSTs JSON array to `/api/admin/seed` with `X-Admin-Secret` header
-3. API endpoint (`api.admin.seed.ts`) validates secret
-4. For each skill:
-   - Upserts into D1 database via Drizzle ORM
-   - Chunks text content into 512-token segments with 10% overlap
-   - Generates embeddings using Workers AI (@cf/baai/bge-base-en-v1.5)
-   - Upserts vectors to Vectorize index with metadata
-5. Returns `{ skills: count, vectors: count }`
+1. `seed-skills.mjs` reads `seed-data.json` and sends batches to `POST /api/admin/seed`
+2. API validates `X-Admin-Secret` header
+3. For each skill:
+   - Upserts into D1 via Drizzle ORM (conflict on `slug`)
+   - Chunks content into ~512-token segments (10% overlap)
+   - Generates 768-dim embeddings via Workers AI (bge-base-en-v1.5)
+   - Upserts vectors to Vectorize index
+4. Returns `{ skills: count, vectors: count }`
 
-## Embedding Pipeline
-
-Each skill goes through:
-
-1. **Text Chunking** (`chunk-text.ts`)
-   - Combines name, description, and content
-   - Splits into ~512 token chunks with 10% overlap
-   - Prevents context loss at chunk boundaries
-
-2. **Embedding Generation** (`embed-text.ts`)
-   - Batches text chunks to Workers AI
-   - Uses BGE-base-en-v1.5 embedding model
-   - Returns 768-dimensional vectors
-
-3. **Vector Indexing** (`index-skill.ts`)
-   - Creates vector IDs: `skill_{skillId}_chunk_{chunkIndex}`
-   - Attaches metadata: skill_id, category, is_paid, avg_rating, chunk_index
-   - Upserts to Vectorize in batches of 1000
-
-## Metadata Schema
-
-Each vector includes:
-```json
-{
-  "skill_id": "uuid-v4",
-  "category": "devops|implementation|testing|security|planning",
-  "is_paid": 0,
-  "avg_rating": 0,
-  "chunk_index": 0
-}
-```
-
-## Idempotency
-
-The seed script is idempotent:
-- D1 upserts on slug conflict (updates existing skills)
-- Vectorize upserts replace existing vectors by ID
-- Safe to run multiple times
-
-## Adding New Skills
-
-Edit `seed-data.json` and add entries following this schema:
+## Skill Schema
 
 ```json
 {
   "name": "skill-name",
-  "slug": "skill-slug",
-  "description": "Short description (50-200 chars)",
-  "content": "Longer markdown content with features, usage, etc.",
+  "slug": "author-skill-name",
+  "description": "Short description",
+  "content": "Markdown content with features, usage, etc.",
   "author": "author-name",
   "source_url": "https://github.com/...",
-  "category": "devops|implementation|testing|security|planning",
-  "install_command": "npx skillx use skill-slug",
+  "category": "implementation|testing|planning|devops|security|documentation|marketing|database",
+  "install_command": "npx skills add author/repo/skill",
   "version": "1.0.0",
   "is_paid": false,
-  "price_cents": 0
+  "price_cents": 0,
+  "github_stars": 1234,
+  "install_count": 0,
+  "avg_rating": 7.2,
+  "rating_count": 25
 }
 ```
 
-Then run `pnpm seed` to update the database.
+**Note:** `github_stars` and `install_count` are separate metrics. Stars come from GitHub; installs are tracked by actual usage.
+
+## Idempotency
+
+- D1 upserts on slug conflict (updates existing skills)
+- Vectorize upserts replace existing vectors by ID
+- Safe to run multiple times

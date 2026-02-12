@@ -2,7 +2,6 @@ import type { ActionFunctionArgs } from "react-router";
 import { getDb } from '~/lib/db';
 import { skills } from '~/lib/db/schema';
 import { indexSkill } from '~/lib/vectorize/index-skill';
-import { recomputeSkillScores } from '~/lib/leaderboard/recompute-skill-scores';
 
 interface SkillInput {
   name: string;
@@ -94,33 +93,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
       skillCount++;
 
-      // Index skill in Vectorize (skip if not available locally)
-      try {
-        const vectors = await indexSkill(env.VECTORIZE, env.AI, {
-          id: skillId,
-          name: skillData.name,
-          description: skillData.description,
-          content: skillData.content,
-          category: skillData.category,
-          is_paid: skillData.is_paid || false,
-          avg_rating: skillData.avg_rating || 0,
-        });
-        vectorCount += vectors;
-      } catch (vecError) {
-        console.warn(`Vectorize skipped for ${skillData.slug}:`, vecError instanceof Error ? vecError.message : vecError);
+      // Index skill in Vectorize (skip via ?skip_vectors=true or if unavailable)
+      const skipVectors = new URL(request.url).searchParams.get('skip_vectors') === 'true';
+      if (!skipVectors) {
+        try {
+          const vectors = await indexSkill(env.VECTORIZE, env.AI, {
+            id: skillId,
+            name: skillData.name,
+            description: skillData.description,
+            content: skillData.content,
+            category: skillData.category,
+            is_paid: skillData.is_paid || false,
+            avg_rating: skillData.avg_rating || 0,
+          });
+          vectorCount += vectors;
+        } catch (vecError) {
+          console.warn(`Vectorize skipped for ${skillData.slug}:`, vecError instanceof Error ? vecError.message : vecError);
+        }
       }
-    }
-
-    // Backfill leaderboard scores for all skills
-    const allSkills = await db.select({ id: skills.id }).from(skills);
-    for (const s of allSkills) {
-      await recomputeSkillScores(db, s.id);
     }
 
     return Response.json({
       skills: skillCount,
       vectors: vectorCount,
-      scoresRecomputed: allSkills.length,
     });
   } catch (error) {
     console.error('Seed error:', error);

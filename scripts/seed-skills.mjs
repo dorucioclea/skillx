@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Seeds skills from seed-data.json to the SkillX API in batches.
+ * Seeds skills to the SkillX API in batches.
  * RESUMABLE: Tracks seeded skill slugs so interrupted runs continue where they left off.
  *
  * Usage: ADMIN_SECRET=xxx node scripts/seed-skills.mjs
@@ -9,11 +9,15 @@
  *        ADMIN_SECRET=xxx node scripts/seed-skills.mjs --reset  (start fresh)
  *
  * Options:
- *   --reset     Clear progress and start from scratch
- *   --batch=N   Skills per batch (default: 50)
+ *   --reset         Clear progress and start from scratch
+ *   --batch=N       Skills per batch (default: 50)
+ *   --skip-vectors  Skip Vectorize embedding (faster, backfill later)
+ *   --from-batches  Read from seed-batches/*.json instead of seed-data.json
+ *   --file=N        Seed only batch file N (e.g. --file=5 seeds batch-005.json)
+ *   --range=A-B     Seed batch files A through B (e.g. --range=6-134)
  */
 
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, readdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -23,11 +27,15 @@ const __dirname = dirname(__filename);
 const API_URL = process.env.API_URL || 'http://localhost:5173';
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 const SEED_FILE = join(__dirname, 'seed-data.json');
+const BATCHES_DIR = join(__dirname, 'seed-batches');
 const PROGRESS_FILE = join(__dirname, '.seed-progress.json');
 
-// Parse --batch=N flag (default 50)
+// Parse flags
 const batchArg = process.argv.find(a => a.startsWith('--batch='));
 const BATCH_SIZE = batchArg ? parseInt(batchArg.split('=')[1], 10) : 50;
+const fromBatches = process.argv.includes('--from-batches');
+const fileArg = process.argv.find(a => a.startsWith('--file='));
+const rangeArg = process.argv.find(a => a.startsWith('--range='));
 
 if (!ADMIN_SECRET) {
   console.error('Error: ADMIN_SECRET environment variable is required');
@@ -51,8 +59,12 @@ async function saveProgress(progress) {
 
 // --- Batch seeding ---
 
+// Parse --skip-vectors flag
+const skipVectors = process.argv.includes('--skip-vectors');
+
 async function seedBatch(batch) {
-  const res = await fetch(`${API_URL}/api/admin/seed`, {
+  const url = skipVectors ? `${API_URL}/api/admin/seed?skip_vectors=true` : `${API_URL}/api/admin/seed`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -69,6 +81,35 @@ async function seedBatch(batch) {
   return res.json();
 }
 
+async function loadFromBatches() {
+  const files = (await readdir(BATCHES_DIR)).filter(f => f.endsWith('.json')).sort();
+
+  let selected;
+  if (fileArg) {
+    const num = String(parseInt(fileArg.split('=')[1], 10)).padStart(3, '0');
+    selected = files.filter(f => f === `batch-${num}.json`);
+    if (selected.length === 0) throw new Error(`Batch file batch-${num}.json not found`);
+  } else if (rangeArg) {
+    const [a, b] = rangeArg.split('=')[1].split('-').map(Number);
+    selected = files.filter(f => {
+      const n = parseInt(f.match(/batch-(\d+)/)[1], 10);
+      return n >= a && n <= b;
+    });
+    if (selected.length === 0) throw new Error(`No batch files in range ${a}-${b}`);
+  } else {
+    selected = files;
+  }
+
+  console.log(`Loading ${selected.length} batch file(s) from ${BATCHES_DIR}`);
+  const allSkills = [];
+  for (const file of selected) {
+    const batch = JSON.parse(await readFile(join(BATCHES_DIR, file), 'utf-8'));
+    allSkills.push(...batch);
+  }
+  console.log(`Loaded ${allSkills.length} skills from batch files\n`);
+  return allSkills;
+}
+
 async function main() {
   // Handle --reset flag
   if (process.argv.includes('--reset')) {
@@ -76,8 +117,14 @@ async function main() {
     console.log('Seed progress reset.\n');
   }
 
-  // Load seed data and progress
-  const allSkills = JSON.parse(await readFile(SEED_FILE, 'utf-8'));
+  // Load seed data from batches or single file
+  let allSkills;
+  if (fromBatches || fileArg || rangeArg) {
+    allSkills = await loadFromBatches();
+  } else {
+    allSkills = JSON.parse(await readFile(SEED_FILE, 'utf-8'));
+  }
+
   const progress = await loadProgress();
   const seededSlugs = new Set(progress.seededSlugs);
 
