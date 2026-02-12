@@ -6,7 +6,7 @@ import { getSession } from "~/lib/auth/session-helpers";
 import { getDb } from "~/lib/db";
 import { apiKeys } from "~/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.cloudflare.env as Env;
@@ -83,10 +83,12 @@ export default function Settings() {
     setShowNewKeyModal(false);
   };
 
-  // Show generated key once
-  if (createFetcher.data?.key && !generatedKey) {
-    setGeneratedKey(createFetcher.data.key);
-  }
+  // Show generated key when fetcher returns a new one
+  useEffect(() => {
+    if (createFetcher.data?.key) {
+      setGeneratedKey(createFetcher.data.key);
+    }
+  }, [createFetcher.data]);
 
   const handleDeleteKey = (keyId: string) => {
     if (!confirm("Are you sure you want to revoke this API key?")) return;
