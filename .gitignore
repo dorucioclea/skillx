@@ -25,11 +25,14 @@ worker-configuration.d.ts
 *.swp
 *.swo
 
-# Scraper
+# Scraper & seed data
 scripts/scrape-progress.json
 scripts/scraped-skills.json
 scripts/.fetch-progress.json
+scripts/.fetch-all-progress.json
 scripts/.seed-progress.json
+scripts/seed-data.json
+scripts/seed-batches/
 
 # OS
 Thumbs.db
