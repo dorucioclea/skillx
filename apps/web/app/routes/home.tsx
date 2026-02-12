@@ -94,8 +94,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           The Only Skill That Your AI Agent Needs.
         </p>
 
-        <div className="mx-auto mt-8 max-w-lg">
-          <CommandBox command='npx skillx use "deploy to cloudflare" --search' />
+        <div className="mx-auto mt-8 flex max-w-lg flex-col gap-3">
+          <div>
+            <p className="mb-1.5 text-left font-mono text-xs text-sx-fg-muted">
+              Install the skill:
+            </p>
+            <CommandBox command="npx skills add nextlevelbuilder/skillx" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-left font-mono text-xs text-sx-fg-muted">
+              Then use it:
+            </p>
+            <CommandBox command='npx skillx use "deploy to cloudflare" --search' />
+          </div>
         </div>
 
         {/* Stats Row */}
