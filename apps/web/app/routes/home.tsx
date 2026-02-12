@@ -1,7 +1,7 @@
 import type { Route } from "./+types/home";
 import { CommandBox } from "../components/command-box";
 import { SkillCard } from "../components/skill-card";
-import { LeaderboardTable } from "../components/leaderboard-table";
+import { HomeLeaderboard } from "../components/home-leaderboard";
 import { getDb } from "~/lib/db";
 import { skills } from "~/lib/db/schema";
 import { desc, count, sql } from "drizzle-orm";
@@ -42,13 +42,14 @@ export async function loader({ context }: Route.LoaderArgs) {
     .orderBy(desc(skills.avg_rating))
     .limit(6);
 
-  // Get leaderboard entries (top 30 by rating, cached)
+  // Get first page of leaderboard (paginated for infinite scroll)
+  const PAGE_SIZE = 20;
   const leaderboardEntries = await getCached(
     env.KV,
-    "leaderboard:top",
+    `leaderboard:page:installs:0:${PAGE_SIZE}`,
     300,
     async () => {
-      const results = await db
+      return db
         .select({
           slug: skills.slug,
           name: skills.name,
@@ -58,23 +59,24 @@ export async function loader({ context }: Route.LoaderArgs) {
         })
         .from(skills)
         .orderBy(desc(skills.install_count))
-        .limit(30);
-      return results;
+        .limit(PAGE_SIZE + 1);
     }
   );
 
-  const ranked = leaderboardEntries.map((e, i) => ({
-    ...e,
-    rank: i + 1,
-    installs: e.installs || 0,
-    rating: e.rating || 0,
-  }));
+  const hasMore = leaderboardEntries.length > PAGE_SIZE;
+  const ranked = (hasMore ? leaderboardEntries.slice(0, PAGE_SIZE) : leaderboardEntries)
+    .map((e, i) => ({
+      ...e,
+      rank: i + 1,
+      installs: e.installs || 0,
+      rating: e.rating || 0,
+    }));
 
-  return { stats, featuredSkills, leaderboard: ranked };
+  return { stats, featuredSkills, leaderboard: ranked, leaderboardHasMore: hasMore };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { stats, featuredSkills, leaderboard } = loaderData;
+  const { stats, featuredSkills, leaderboard, leaderboardHasMore } = loaderData;
 
   return (
     <div className="flex flex-col items-center px-4">
@@ -156,7 +158,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <h2 className="mb-6 text-center font-mono text-xl font-bold text-sx-fg">
           Leaderboard
         </h2>
-        <LeaderboardTable entries={leaderboard} />
+        <HomeLeaderboard initialEntries={leaderboard} initialHasMore={leaderboardHasMore} />
       </div>
     </div>
   );
