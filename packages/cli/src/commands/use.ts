@@ -14,15 +14,53 @@ interface SkillDetails {
   content: string;
 }
 
+interface RegisterResponse {
+  skill: SkillDetails;
+  created: boolean;
+}
+
+/** Detect org/repo GitHub format and return [owner, repo] or null */
+function parseGitHubSlug(slug: string): [string, string] | null {
+  const match = slug.match(/^([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)$/);
+  return match ? [match[1], match[2]] : null;
+}
+
+/** Convert org/repo to API-safe slug: org-repo */
+function toApiSlug(owner: string, repo: string): string {
+  return `${owner}-${repo}`.toLowerCase();
+}
+
 export const useCommand = new Command('use')
   .description('View and use a skill from SkillX marketplace')
   .argument('<slug>', 'Skill slug identifier')
   .option('-r, --raw', 'Output raw content only (for piping)')
-  .action(async (slug: string, options: { raw?: boolean }) => {
-    const spinner = ora(`Fetching skill: ${slug}...`).start();
+  .action(async (slugArg: string, options: { raw?: boolean }) => {
+    const spinner = ora(`Fetching skill: ${slugArg}...`).start();
+    const ghParts = parseGitHubSlug(slugArg);
+    const apiSlug = ghParts ? toApiSlug(ghParts[0], ghParts[1]) : slugArg;
 
     try {
-      const skill = await apiRequest<SkillDetails>(`/api/skills/${slug}`);
+
+      let skill: SkillDetails;
+      try {
+        skill = await apiRequest<SkillDetails>(`/api/skills/${apiSlug}`);
+      } catch (fetchErr) {
+        // On 404 + GitHub org/repo format → auto-register from GitHub
+        if (fetchErr instanceof ApiError && fetchErr.status === 404 && ghParts) {
+          spinner.text = `Skill not found. Registering from GitHub: ${slugArg}...`;
+          const res = await apiRequest<RegisterResponse>('/api/skills/register', {
+            method: 'POST',
+            body: JSON.stringify({ owner: ghParts[0], repo: ghParts[1] }),
+          });
+          skill = res.skill;
+          if (res.created) {
+            spinner.succeed(`Registered new skill from GitHub: ${slugArg}`);
+          }
+        } else {
+          throw fetchErr;
+        }
+      }
+
       spinner.stop();
 
       // Fire-and-forget install tracking (silent failure)
@@ -33,7 +71,7 @@ export const useCommand = new Command('use')
       if (apiKey) {
         installHeaders['Authorization'] = `Bearer ${apiKey}`;
       }
-      fetch(`${getBaseUrl()}/api/skills/${slug}/install`, {
+      fetch(`${getBaseUrl()}/api/skills/${skill.slug}/install`, {
         method: 'POST',
         headers: installHeaders,
       }).catch(() => {});
@@ -69,15 +107,20 @@ export const useCommand = new Command('use')
       }
 
       console.log(chalk.dim('\n─'.repeat(80)));
-      console.log(chalk.dim(`\nUse ${chalk.cyan(`skillx use ${slug} --raw`)} to output full content`));
-      console.log(chalk.dim(`View online at: ${chalk.underline(`https://skillx.sh/skills/${slug}`)}`));
+      console.log(chalk.dim(`\nUse ${chalk.cyan(`skillx use ${slugArg} --raw`)} to output full content`));
+      console.log(chalk.dim(`View online at: ${chalk.underline(`https://skillx.sh/skills/${skill.slug}`)}`));
     } catch (error) {
       spinner.stop();
 
       if (error instanceof ApiError) {
         if (error.status === 404) {
-          console.error(chalk.red(`\n✗ Skill not found: ${slug}`));
+          console.error(chalk.red(`\n✗ Skill not found: ${slugArg}`));
+          if (ghParts) {
+            console.error(chalk.dim(`GitHub repo ${slugArg} may not exist or is private.`));
+          }
           console.error(chalk.dim(`Search for skills with: ${chalk.cyan('skillx search <query>')}`));
+        } else if (error.status === 429) {
+          console.error(chalk.red(`\n✗ Rate limited. Try again later.`));
         } else {
           console.error(chalk.red(`\n✗ API Error: ${error.message}`));
         }
