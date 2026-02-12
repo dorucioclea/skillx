@@ -84,6 +84,17 @@
 │ created_at             │    │ revoked_at          │
 └────────────────────────┘    │ created_at          │
                               └─────────────────────┘
+
+┌────────────────────────┐
+│    INSTALLS            │
+├────────────────────────┤
+│ id (PK)                │
+│ skill_id (FK)          │
+│ user_id (nullable)     │
+│ device_id (nullable)   │
+│ created_at             │
+│ (dedup per user/device)│
+└────────────────────────┘
 ```
 
 **Indexes:**
@@ -269,6 +280,7 @@ Response:
 | POST | `/api/skills/:slug/rate` | Submit rating |
 | POST | `/api/skills/:slug/review` | Write review |
 | POST | `/api/skills/:slug/favorite` | Add/remove favorite |
+| POST | `/api/skills/:slug/install` | Track install (fire-and-forget) |
 | POST | `/api/report` | Report usage |
 
 ### User Endpoints (Session Only)

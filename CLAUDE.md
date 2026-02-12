@@ -77,13 +77,14 @@ pnpm db:migrate:remote    # Apply migrations to remote D1
 | `/api/skills/:slug/rate` | api.skill-rate.ts | Session/Key |
 | `/api/skills/:slug/review` | api.skill-review.ts | Session/Key |
 | `/api/skills/:slug/favorite` | api.skill-favorite.ts | Session/Key |
+| `/api/skills/:slug/install` | api.skill-install.ts | Optional (API key or X-Device-Id) |
 | `/api/report` | api.usage-report.ts | Session/Key |
 | `/api/user/api-keys` | api.user-api-keys.ts | Session |
 | `/api/admin/seed` | api.admin.seed.ts | Admin secret |
 
 ## Database Tables (Drizzle schema)
 
-`skills`, `ratings`, `reviews`, `favorites`, `usageStats`, `apiKeys`
+`skills`, `ratings`, `reviews`, `favorites`, `usageStats`, `apiKeys`, `installs`
 Plus Better Auth tables: `user`, `session`, `account`, `verification`
 
 ## Key Patterns

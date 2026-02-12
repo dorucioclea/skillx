@@ -67,6 +67,7 @@ skillx/
 | `api.skill-rate.ts` | API | 100 | Create/update rating (0-10) |
 | `api.skill-review.ts` | API | 109 | Create/list reviews |
 | `api.skill-favorite.ts` | API | 74 | Add/remove favorites |
+| `api.skill-install.ts` | API | ? | Track skill install (fire-and-forget) |
 | `api.usage-report.ts` | API | 99 | Log skill execution outcomes |
 | `api.user-api-keys.ts` | API | 133 | Create/list/revoke API keys |
 | `api.admin.seed.ts` | API | 121 | Load demo seed data |
@@ -103,6 +104,7 @@ skillx/
 | `ratings` | id, skill_id, user_id, score, is_agent, timestamps | 0-10 scores |
 | `reviews` | id, skill_id, user_id, content, is_agent, created_at | Text feedback |
 | `favorites` | user_id, skill_id, created_at | Many-to-many bookmarks |
+| `installs` | id, skill_id, user_id, device_id, created_at | Install tracking (deduplicated per user/device) |
 | `usageStats` | id, skill_id, user_id, model, outcome, duration_ms, created_at | Execution tracking |
 | `apiKeys` | id, user_id, name, key_hash, key_prefix, last_used_at, revoked_at, created_at | API authentication |
 
@@ -166,11 +168,11 @@ skillx/
 |------|-----|---------|
 | `index.ts` | - | Commander.js CLI entry + command registration |
 | `commands/search.ts` | 86 | `skillx search "..."` → API call → table output |
-| `commands/use.ts` | 78 | `skillx use skill1 skill2` → fetch SKILL.md, echo to stdout |
+| `commands/use.ts` | 78 | `skillx use skill1 skill2` → fetch SKILL.md, POST install, echo to stdout |
 | `commands/report.ts` | 90 | `skillx report` → POST usage metrics to API |
 | `commands/config.ts` | 91 | `skillx config set/get KEY VALUE` → local store |
 | `lib/api-client.ts` | 35 | HTTP client with API key auth |
-| `utils/config-store.ts` | - | conf package: ~/.skillx/config.json |
+| `utils/config-store.ts` | - | conf package: ~/.skillx/config.json, includes getDeviceId() |
 
 **Usage:**
 ```bash
