@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, real, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 // Skills - core marketplace entity
@@ -109,6 +110,29 @@ export const usageStats = sqliteTable(
   (table) => [
     index("idx_usage_skill").on(table.skill_id),
     index("idx_usage_created").on(table.created_at),
+  ]
+);
+
+// Installs - deduplicated install tracking per user/device
+export const installs = sqliteTable(
+  "installs",
+  {
+    id: text("id").primaryKey(),
+    skill_id: text("skill_id")
+      .notNull()
+      .references(() => skills.id, { onDelete: "cascade" }),
+    user_id: text("user_id"),
+    device_id: text("device_id"),
+    created_at: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("idx_installs_skill").on(table.skill_id),
+    uniqueIndex("idx_installs_user")
+      .on(table.skill_id, table.user_id)
+      .where(sql`user_id IS NOT NULL`),
+    uniqueIndex("idx_installs_device")
+      .on(table.skill_id, table.device_id)
+      .where(sql`device_id IS NOT NULL`),
   ]
 );
 

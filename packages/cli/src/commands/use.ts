@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { apiRequest, ApiError } from '../lib/api-client.js';
+import { getApiKey, getBaseUrl, getDeviceId } from '../utils/config-store.js';
 
 interface SkillDetails {
   slug: string;
@@ -23,6 +24,19 @@ export const useCommand = new Command('use')
     try {
       const skill = await apiRequest<SkillDetails>(`/api/skills/${slug}`);
       spinner.stop();
+
+      // Fire-and-forget install tracking (silent failure)
+      const installHeaders: Record<string, string> = {
+        'X-Device-Id': getDeviceId(),
+      };
+      const apiKey = getApiKey();
+      if (apiKey) {
+        installHeaders['Authorization'] = `Bearer ${apiKey}`;
+      }
+      fetch(`${getBaseUrl()}/api/skills/${slug}/install`, {
+        method: 'POST',
+        headers: installHeaders,
+      }).catch(() => {});
 
       if (options.raw) {
         console.log(skill.content);

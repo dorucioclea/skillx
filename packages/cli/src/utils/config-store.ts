@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import Conf from 'conf';
 
 const config = new Conf({ projectName: 'skillx' });
@@ -16,4 +17,13 @@ export function getBaseUrl(): string {
 
 export function setBaseUrl(url: string): void {
   config.set('baseUrl', url);
+}
+
+export function getDeviceId(): string {
+  let deviceId = config.get('deviceId') as string | undefined;
+  if (!deviceId) {
+    deviceId = randomUUID();
+    config.set('deviceId', deviceId);
+  }
+  return deviceId;
 }

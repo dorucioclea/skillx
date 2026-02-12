@@ -16,6 +16,7 @@ export default [
   route("api/skills/:slug/rate", "routes/api.skill-rate.ts"),
   route("api/skills/:slug/review", "routes/api.skill-review.ts"),
   route("api/skills/:slug/favorite", "routes/api.skill-favorite.ts"),
+  route("api/skills/:slug/install", "routes/api.skill-install.ts"),
   route("api/report", "routes/api.usage-report.ts"),
   route("api/user/api-keys", "routes/api.user-api-keys.ts"),
   route("*", "routes/$.tsx"),
