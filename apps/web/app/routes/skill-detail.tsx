@@ -1,90 +1,63 @@
-import { useLoaderData } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { PageContainer } from "../components/layout/page-container";
-import { RatingBadge } from "../components/rating-badge";
 import { CommandBox } from "../components/command-box";
 import { StarRating } from "../components/star-rating";
 import { FavoriteButton } from "../components/favorite-button";
 import { ReviewForm } from "../components/review-form";
 import { ReviewList } from "../components/review-list";
+import { SkillDetailSidebar } from "../components/skill-detail-sidebar";
+import { SkillContentRenderer } from "../components/skill-content-renderer";
 import { getDb } from "~/lib/db";
-import { skills, ratings, reviews, favorites } from "~/lib/db/schema";
-import { eq, desc, count, avg } from "drizzle-orm";
 import { getSession } from "~/lib/auth/session-helpers";
+import {
+  fetchSkillBySlug,
+  fetchSkillReviews,
+  fetchRatingSummary,
+  fetchRatingBreakdown,
+  fetchFavoriteCount,
+  fetchUsageStats,
+  fetchUserSkillData,
+} from "~/lib/db/skill-detail-queries";
 import { useState } from "react";
 import { useFetcher } from "react-router";
+import { FileText } from "lucide-react";
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const slug = params.slug;
-  if (!slug) {
-    throw new Response("Skill not found", { status: 404 });
-  }
+  if (!slug) throw new Response("Skill not found", { status: 404 });
 
   const env = context.cloudflare.env as Env;
   const db = getDb(env.DB);
 
-  // Fetch skill data
-  const [skill] = await db
-    .select()
-    .from(skills)
-    .where(eq(skills.slug, slug))
-    .limit(1);
+  const skill = await fetchSkillBySlug(db, slug);
+  if (!skill) throw new Response("Skill not found", { status: 404 });
 
-  if (!skill) {
-    throw new Response("Skill not found", { status: 404 });
-  }
+  // Run all independent queries in parallel
+  const [skillReviews, ratingSummary, ratingBreakdown, favoriteCount, usage, session] =
+    await Promise.all([
+      fetchSkillReviews(db, skill.id),
+      fetchRatingSummary(db, skill.id),
+      fetchRatingBreakdown(db, skill.id),
+      fetchFavoriteCount(db, skill.id),
+      fetchUsageStats(db, skill.id),
+      getSession(request, env),
+    ]);
 
-  // Fetch reviews
-  const skillReviews = await db
-    .select()
-    .from(reviews)
-    .where(eq(reviews.skill_id, skill.id))
-    .orderBy(desc(reviews.created_at))
-    .limit(50);
-
-  // Calculate rating summary
-  const ratingData = await db
-    .select({
-      avgRating: avg(ratings.score),
-      ratingCount: count(ratings.id),
-    })
-    .from(ratings)
-    .where(eq(ratings.skill_id, skill.id))
-    .get();
-
-  // Check authentication and user data
-  const session = await getSession(request, env);
-  let isFavorited = false;
-  let userRating = null;
-
-  if (session?.user?.id) {
-    const [favorite] = await db
-      .select()
-      .from(favorites)
-      .where(eq(favorites.user_id, session.user.id))
-      .where(eq(favorites.skill_id, skill.id))
-      .limit(1);
-    isFavorited = !!favorite;
-
-    const [rating] = await db
-      .select()
-      .from(ratings)
-      .where(eq(ratings.user_id, session.user.id))
-      .where(eq(ratings.skill_id, skill.id))
-      .limit(1);
-    userRating = rating?.score || null;
-  }
+  // User-specific data (only if authenticated)
+  const userData = session?.user?.id
+    ? await fetchUserSkillData(db, session.user.id, skill.id)
+    : { isFavorited: false, userRating: null };
 
   return {
     skill,
     reviews: skillReviews,
-    isFavorited,
-    userRating,
+    ...userData,
     isAuthenticated: !!session?.user?.id,
-    ratingSummary: {
-      avgRating: Number(ratingData?.avgRating || 0),
-      ratingCount: Number(ratingData?.ratingCount || 0),
-    },
+    ratingSummary,
+    ratingBreakdown,
+    favoriteCount,
+    usage,
   };
 }
 
@@ -106,17 +79,31 @@ export default function SkillDetail() {
     );
   };
 
+  const installCmd = data.skill.install_command || `npx skillx install ${data.skill.slug}`;
+
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="font-mono text-3xl font-bold">{data.skill.name}</h1>
-            <p className="mt-1 text-sm text-sx-fg-muted">by {data.skill.author}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <RatingBadge score={data.ratingSummary.avgRating} />
+      {/* Breadcrumb */}
+      <nav className="mb-6 flex items-center gap-1.5 text-sm text-sx-fg-muted">
+        <Link to="/" className="transition-colors hover:text-sx-fg">skills</Link>
+        <span>/</span>
+        <span className="text-sx-fg-subtle">{data.skill.author}</span>
+        <span>/</span>
+        <span className="text-sx-fg">{data.skill.slug}</span>
+      </nav>
+
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_280px] lg:gap-16">
+        {/* Main content */}
+        <div className="min-w-0">
+          {/* Header */}
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-sans text-4xl font-semibold tracking-tight">
+                {data.skill.name}
+              </h1>
+              <p className="mt-1.5 text-sm text-sx-fg-muted">by {data.skill.author}</p>
+            </div>
             {data.isAuthenticated && (
               <FavoriteButton
                 skillSlug={data.skill.slug}
@@ -125,59 +112,73 @@ export default function SkillDetail() {
               />
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Description */}
-      <div className="mb-8">
-        <h2 className="mb-3 font-mono text-lg font-semibold">Description</h2>
-        <p className="text-sx-fg-muted">{data.skill.description}</p>
-      </div>
+          {/* Install command card */}
+          <div className="mb-8">
+            <CommandBox command={installCmd} />
+          </div>
 
-      {/* Category Badge */}
-      <div className="mb-8">
-        <h2 className="mb-3 font-mono text-lg font-semibold">Category</h2>
-        <span className="inline-block rounded-full bg-phase-devops-bg px-3 py-1 text-sm font-medium text-phase-devops">
-          {data.skill.category}
-        </span>
-      </div>
+          {/* SKILL.md label */}
+          <div className="mb-4 flex items-center gap-2 text-xs text-sx-fg-subtle">
+            <FileText size={14} />
+            <span className="font-mono uppercase tracking-wider">SKILL.md</span>
+          </div>
 
-      {/* Install Command */}
-      <div className="mb-8">
-        <h2 className="mb-3 font-mono text-lg font-semibold">Installation</h2>
-        <CommandBox command={data.skill.install_command || `npx skillx install ${data.skill.slug}`} />
-      </div>
+          {/* Separator */}
+          <hr className="mb-8 border-sx-border" />
 
-      {/* User Rating (if authenticated) */}
-      {data.isAuthenticated && (
-        <div className="mb-8">
-          <h2 className="mb-3 font-mono text-lg font-semibold">Your Rating</h2>
-          <div className="rounded-lg border border-sx-border bg-sx-bg-elevated p-4">
-            <StarRating value={localRating} onChange={handleRatingChange} />
+          {/* Description / Content (rendered as markdown) */}
+          <div className="mb-10">
+            {data.skill.content && data.skill.content !== data.skill.description ? (
+              <SkillContentRenderer content={data.skill.content} />
+            ) : (
+              <p className="text-sx-fg-muted leading-relaxed">{data.skill.description}</p>
+            )}
+          </div>
+
+          {/* User Rating */}
+          {data.isAuthenticated && (
+            <div className="mb-8">
+              <h2 className="mb-3 text-lg font-semibold tracking-tight">Your Rating</h2>
+              <div className="rounded-lg border border-sx-border bg-sx-bg-elevated p-4">
+                <StarRating value={localRating} onChange={handleRatingChange} />
+              </div>
+            </div>
+          )}
+
+          {/* Reviews */}
+          <div className="mb-8">
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">
+              Reviews
+              <span className="ml-2 text-sm font-normal text-sx-fg-muted">
+                ({data.reviews.length})
+              </span>
+            </h2>
+            {data.isAuthenticated && (
+              <div className="mb-6">
+                <ReviewForm skillSlug={data.skill.slug} />
+              </div>
+            )}
+            <ReviewList reviews={data.reviews} />
           </div>
         </div>
-      )}
 
-      {/* Aggregate Rating */}
-      <div className="mb-8">
-        <h2 className="mb-3 font-mono text-lg font-semibold">Community Rating</h2>
-        <div className="flex items-center gap-4 rounded-lg border border-sx-border bg-sx-bg-elevated p-4">
-          <RatingBadge score={data.ratingSummary.avgRating} />
-          <span className="text-sm text-sx-fg-muted">
-            Based on {data.ratingSummary.ratingCount} rating{data.ratingSummary.ratingCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </div>
-
-      {/* Reviews Section */}
-      <div className="mb-8">
-        <h2 className="mb-3 font-mono text-lg font-semibold">Reviews</h2>
-        {data.isAuthenticated && (
-          <div className="mb-6">
-            <ReviewForm skillSlug={data.skill.slug} />
-          </div>
-        )}
-        <ReviewList reviews={data.reviews} />
+        {/* Sidebar */}
+        <SkillDetailSidebar
+          installs={data.skill.install_count ?? 0}
+          avgRating={data.ratingSummary.avgRating}
+          ratingCount={data.ratingSummary.ratingCount}
+          humanRatingCount={data.ratingBreakdown.humanCount}
+          agentRatingCount={data.ratingBreakdown.agentCount}
+          successRate={data.usage.successRate}
+          totalUsages={data.usage.totalUsages}
+          sourceUrl={data.skill.source_url}
+          category={data.skill.category}
+          version={data.skill.version ?? "1.0.0"}
+          createdAt={data.skill.created_at}
+          favoriteCount={data.favoriteCount}
+          modelBreakdown={data.usage.modelBreakdown}
+        />
       </div>
     </PageContainer>
   );

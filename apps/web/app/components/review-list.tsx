@@ -2,8 +2,8 @@ interface Review {
   id: string;
   user_id: string;
   content: string;
-  created_at: number;
-  is_agent: boolean;
+  created_at: number | Date;
+  is_agent: boolean | null;
 }
 
 interface ReviewListProps {
@@ -19,8 +19,8 @@ export function ReviewList({ reviews }: ReviewListProps) {
     );
   }
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
+  const formatDate = (timestamp: number | Date) => {
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "short",
