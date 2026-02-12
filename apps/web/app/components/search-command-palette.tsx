@@ -11,6 +11,7 @@ interface SearchResult {
   category: string;
   avg_rating?: number;
   install_count?: number;
+  final_score?: number;
 }
 
 interface SearchCommandPaletteProps {
@@ -153,6 +154,11 @@ export function SearchCommandPalette({ open, onClose }: SearchCommandPaletteProp
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {result.final_score != null && (
+                      <span className="rounded bg-sx-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-sx-accent">
+                        {Math.round(result.final_score * 100)}%
+                      </span>
+                    )}
                     {result.avg_rating ? (
                       <RatingBadge score={result.avg_rating} />
                     ) : null}

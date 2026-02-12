@@ -63,34 +63,48 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   const [isLoading, setIsLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // Refs to avoid stale closures in IntersectionObserver callback
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(initialHasMore);
+  const entriesLengthRef = useRef(initialEntries.length);
+
   // Reset state when loader data changes (sort change via URL navigation)
   const [prevSort, setPrevSort] = useState(sort);
   if (sort !== prevSort) {
     setPrevSort(sort);
     setEntries(initialEntries);
     setHasMore(initialHasMore);
+    hasMoreRef.current = initialHasMore;
+    entriesLengthRef.current = initialEntries.length;
   }
 
   const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return;
+    if (loadingRef.current || !hasMoreRef.current) return;
+    loadingRef.current = true;
     setIsLoading(true);
 
     try {
       const res = await fetch(
-        `/api/leaderboard?sort=${sort}&offset=${entries.length}&limit=${PAGE_SIZE}`
+        `/api/leaderboard?sort=${sort}&offset=${entriesLengthRef.current}&limit=${PAGE_SIZE}`
       );
       const data = (await res.json()) as {
         entries: typeof initialEntries;
         hasMore: boolean;
       };
-      setEntries((prev) => [...prev, ...data.entries]);
+      setEntries((prev) => {
+        const updated = [...prev, ...data.entries];
+        entriesLengthRef.current = updated.length;
+        return updated;
+      });
+      hasMoreRef.current = data.hasMore;
       setHasMore(data.hasMore);
     } catch {
       // Silently fail — user can scroll again to retry
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
     }
-  }, [isLoading, hasMore, sort, entries.length]);
+  }, [sort]);
 
   // IntersectionObserver triggers loadMore when sentinel enters viewport
   useEffect(() => {

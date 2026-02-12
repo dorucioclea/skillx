@@ -204,6 +204,13 @@ body {
   color: var(--color-sx-fg-subtle);
 }
 
+/* Prevent iOS auto-zoom on input focus (requires >= 16px) */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
