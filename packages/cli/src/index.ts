@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { searchCommand } from './commands/search.js';
 import { useCommand } from './commands/use.js';
+import { findCommand } from './commands/find.js';
 import { reportCommand } from './commands/report.js';
 import { configCommand } from './commands/config.js';
 
@@ -14,6 +15,7 @@ program
 
 program.addCommand(searchCommand);
 program.addCommand(useCommand);
+program.addCommand(findCommand);
 program.addCommand(reportCommand);
 program.addCommand(configCommand);
 
