@@ -118,7 +118,7 @@ export default function Settings() {
 
       {/* Generated Key Modal */}
       {generatedKey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg rounded-lg border border-sx-border bg-sx-bg p-6">
             <h3 className="mb-4 font-mono text-lg font-semibold">
               API Key Generated
@@ -126,7 +126,7 @@ export default function Settings() {
             <p className="mb-4 text-sm text-sx-fg-muted">
               Copy this key now. It will not be shown again.
             </p>
-            <div className="mb-6 rounded-lg bg-sx-bg-elevated p-4 font-mono text-sm">
+            <div className="mb-6 break-all rounded-lg bg-sx-bg-elevated p-4 font-mono text-sm">
               {generatedKey}
             </div>
             <button
