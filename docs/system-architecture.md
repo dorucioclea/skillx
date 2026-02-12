@@ -364,6 +364,37 @@ Response:
 | Worker crash | Cloudflare auto-restart |
 | Data corruption | D1 point-in-time restore |
 
+## Claude Code Plugin Marketplace Distribution
+
+SkillX provides two Claude Code plugins via marketplace:
+
+**Marketplace Catalog:** `.claude-plugin/marketplace.json`
+- Registered as `skillx-marketplace` owned by SkillX.sh
+- Contains plugin manifest entries with version, description, homepage, repository
+
+**Plugins:**
+
+1. **skill-creator** (v3.0.0)
+   - Source: `.claude/skills/skill-creator/`
+   - Purpose: Create/update Claude skills optimized for Skillmark benchmarks
+   - Install: `/plugin install skill-creator@skillx-marketplace`
+
+2. **skillx** (v1.0.0)
+   - Source: `.claude/skills/skillx/`
+   - Purpose: Search, install, use skills from SkillX.sh marketplace
+   - Install: `/plugin install skillx@skillx-marketplace`
+
+**Discovery Flow:**
+```
+/plugin marketplace add nextlevelbuilder/skillx
+  ↓
+Loads .claude-plugin/marketplace.json
+  ↓
+User sees skillx-marketplace with 2 plugins
+  ↓
+/plugin install skill-creator@skillx-marketplace
+```
+
 ---
 
 **Last Updated:** Feb 2025

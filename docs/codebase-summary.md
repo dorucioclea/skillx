@@ -32,6 +32,15 @@ skillx/
 │       │   ├── lib/                   # API client, config store
 │       │   └── index.ts               # Commander.js CLI setup
 │       └── package.json
+├── .claude-plugin/
+│   └── marketplace.json               # Claude Code plugin marketplace catalog
+├── .claude/skills/
+│   ├── skill-creator/                 # Skill creation tool (v3.0.0)
+│   │   └── .claude-plugin/
+│   │       └── plugin.json            # skill-creator plugin manifest
+│   └── skillx/                        # SkillX marketplace CLI skill (v1.0.0)
+│       └── .claude-plugin/
+│           └── plugin.json            # skillx plugin manifest
 ├── scripts/
 │   ├── seed-data.json                 # 30 real skills from skills.sh
 │   └── seed-skills.mjs                # Seed script runner

@@ -62,6 +62,18 @@ skillx report --outcome success
 skillx config set/get KEY VALUE
 ```
 
+### 4. Claude Code Plugin Marketplace
+Discover and install skills directly in Claude Code:
+```bash
+/plugin marketplace add nextlevelbuilder/skillx
+/plugin install skill-creator@skillx-marketplace
+/plugin install skillx@skillx-marketplace
+```
+
+**Plugins:**
+- **skill-creator** (v3.0.0) — Create/update skills optimized for Skillmark benchmarks
+- **skillx** (v1.0.0) — Search and use skills from SkillX.sh marketplace
+
 ## Architecture
 
 **Tech Stack:**
@@ -80,6 +92,11 @@ skillx/
 │   ├── components/        # UI components
 │   └── lib/               # DB, auth, search, vectorization
 ├── packages/cli/          # skillx npm package (~400 LOC)
+├── .claude-plugin/        # Claude Code plugin marketplace
+│   └── marketplace.json   # Marketplace catalog + plugin manifests
+├── .claude/skills/        # Claude Code skills
+│   ├── skill-creator/     # Skill creation tool (v3.0.0)
+│   └── skillx/            # SkillX marketplace CLI skill (v1.0.0)
 ├── scripts/               # Seed data (30 real skills)
 └── docs/                  # Documentation
 ```
