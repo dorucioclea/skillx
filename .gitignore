@@ -25,5 +25,9 @@ worker-configuration.d.ts
 *.swp
 *.swo
 
+# Scraper
+scripts/scrape-progress.json
+scripts/scraped-skills.json
+
 # OS
 Thumbs.db
