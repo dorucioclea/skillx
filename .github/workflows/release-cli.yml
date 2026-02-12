@@ -14,6 +14,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs['packages/cli--release_created'] }}
       tag_name: ${{ steps.release.outputs['packages/cli--tag_name'] }}
+      version: ${{ steps.release.outputs['packages/cli--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -38,9 +39,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build CLI
-        run: pnpm --filter skillx build
+        run: pnpm --filter skillx-sh build
 
       - name: Publish to NPM
-        run: pnpm --filter skillx publish --no-git-checks --access public
+        run: pnpm --filter skillx-sh publish --no-git-checks --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

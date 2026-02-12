@@ -1,5 +1,5 @@
 {
-  "name": "skillx",
+  "name": "skillx-sh",
   "version": "0.1.1",
   "description": "The Only Skill That Your AI Agent Needs.",
   "type": "module",
@@ -27,7 +27,8 @@
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "README.md"
   ],
   "keywords": [
     "ai",
