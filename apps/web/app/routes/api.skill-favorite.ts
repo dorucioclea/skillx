@@ -67,8 +67,10 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       favorited = true;
     }
 
-    // Recompute leaderboard scores
-    await recomputeSkillScores(db, skill.id);
+    // Recompute leaderboard scores (fire-and-forget to avoid blocking response)
+    recomputeSkillScores(db, skill.id).catch((err) =>
+      console.error("Failed to recompute scores after favorite toggle:", err)
+    );
 
     return Response.json({ favorited });
   } catch (error) {
