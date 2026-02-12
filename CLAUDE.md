@@ -14,7 +14,7 @@ SkillX.sh — AI agent skills marketplace. Web marketplace + CLI + hybrid search
 - **Cache**: Cloudflare KV (5min TTL search, 5min leaderboard)
 - **Storage**: R2 (assets), Workers AI (embeddings)
 - **CSS**: Tailwind v4 + `@theme` tokens (dark-only, mint accent `#00E5A0`)
-- **CLI**: Commander.js + chalk + ora + conf (package name: `skillx`)
+- **CLI**: Commander.js + chalk + ora + conf (package name: `skillx-sh`, bin name: `skillx`)
 
 ## Directory Structure
 
