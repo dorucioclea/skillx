@@ -45,7 +45,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
     // Upsert rating (update if exists, insert if not)
     const ratingId = `${session.user.id}-${skill.id}`;
-    const now = Date.now();
+    const now = new Date();
 
     await db
       .insert(ratings)

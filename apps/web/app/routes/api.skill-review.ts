@@ -87,7 +87,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
     // Create review
     const reviewId = `review-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const now = Date.now();
+    const now = new Date();
 
     const [review] = await db
       .insert(reviews)

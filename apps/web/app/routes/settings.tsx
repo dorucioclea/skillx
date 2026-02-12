@@ -101,7 +101,7 @@ export default function Settings() {
     );
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp: number | string | Date) => {
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "short",

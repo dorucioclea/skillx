@@ -74,7 +74,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
       const { plaintext, hash, prefix } = await generateApiKey();
       const keyId = `key-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const now = Date.now();
+      const now = new Date();
 
       await db.insert(apiKeys).values({
         id: keyId,
@@ -105,7 +105,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       // Verify ownership and revoke
       const result = await db
         .update(apiKeys)
-        .set({ revoked_at: Date.now() })
+        .set({ revoked_at: new Date() })
         .where(
           and(
             eq(apiKeys.id, keyId),

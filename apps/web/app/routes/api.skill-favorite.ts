@@ -62,7 +62,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       await db.insert(favorites).values({
         user_id: session.user.id,
         skill_id: skill.id,
-        created_at: Date.now(),
+        created_at: new Date(),
       });
       favorited = true;
     }

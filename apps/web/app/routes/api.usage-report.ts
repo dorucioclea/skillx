@@ -47,7 +47,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Update last used timestamp
     await db
       .update(apiKeys)
-      .set({ last_used_at: Date.now() })
+      .set({ last_used_at: new Date() })
       .where(eq(apiKeys.id, foundKey.id));
 
     // Parse and validate body
@@ -89,7 +89,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       model: model || null,
       outcome,
       duration_ms: duration_ms || null,
-      created_at: Date.now(),
+      created_at: new Date(),
     });
 
     // Recompute leaderboard scores
