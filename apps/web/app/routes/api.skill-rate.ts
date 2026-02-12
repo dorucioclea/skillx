@@ -3,6 +3,7 @@ import { getDb } from "~/lib/db";
 import { skills, ratings } from "~/lib/db/schema";
 import { eq, avg, count } from "drizzle-orm";
 import { getSession } from "~/lib/auth/session-helpers";
+import { recomputeSkillScores } from "~/lib/leaderboard/recompute-skill-scores";
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
   try {
@@ -87,6 +88,9 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
         updated_at: now,
       })
       .where(eq(skills.id, skill.id));
+
+    // Recompute leaderboard scores
+    await recomputeSkillScores(db, skill.id);
 
     return Response.json({
       success: true,

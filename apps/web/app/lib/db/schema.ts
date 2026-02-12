@@ -20,6 +20,11 @@ export const skills = sqliteTable(
     rating_count: integer("rating_count").default(0),
     github_stars: integer("github_stars").default(0),
     install_count: integer("install_count").default(0),
+    // Precomputed leaderboard scores (updated on write events)
+    composite_score: real("composite_score").default(0),
+    bayesian_rating: real("bayesian_rating").default(0),
+    trending_score: real("trending_score").default(0),
+    favorite_count: integer("favorite_count").default(0),
     created_at: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updated_at: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
@@ -27,6 +32,8 @@ export const skills = sqliteTable(
     index("idx_skills_category").on(table.category),
     index("idx_skills_author").on(table.author),
     index("idx_skills_avg_rating").on(table.avg_rating),
+    index("idx_skills_composite_score").on(table.composite_score),
+    index("idx_skills_trending_score").on(table.trending_score),
   ]
 );
 

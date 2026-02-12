@@ -3,25 +3,58 @@ import type { Route } from "./+types/leaderboard";
 import { PageContainer } from "../components/layout/page-container";
 import { FilterTabs } from "../components/filter-tabs";
 import { LeaderboardTable } from "../components/leaderboard-table";
+import type { LeaderboardEntry } from "../components/leaderboard-table";
 import { getDb } from "~/lib/db";
 import { skills } from "~/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { getCached } from "~/lib/cache/kv-cache";
 
 const PAGE_SIZE = 20;
+const VALID_SORTS = ["best", "rating", "installs", "trending", "newest"];
+
+function getOrderColumn(sort: string) {
+  switch (sort) {
+    case "best": return skills.composite_score;
+    case "rating": return skills.bayesian_rating;
+    case "installs": return skills.install_count;
+    case "trending": return skills.trending_score;
+    case "newest": return skills.created_at;
+    default: return skills.composite_score;
+  }
+}
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const env = context.cloudflare.env;
   const db = getDb(env.DB);
   const url = new URL(request.url);
-  const sort = url.searchParams.get("sort") || "rating";
+  const rawSort = url.searchParams.get("sort") || "best";
+  const sort = VALID_SORTS.includes(rawSort) ? rawSort : "best";
+  const orderCol = getOrderColumn(sort);
 
-  const orderCol =
-    sort === "installs" ? skills.install_count : skills.avg_rating;
+  // Badge thresholds (top 10% cutoffs)
+  const thresholds = await getCached(env.KV, "leaderboard:thresholds", 300, async () => {
+    const [stats] = await db
+      .select({
+        p90Installs: sql<number>`coalesce((
+          SELECT install_count FROM skills ORDER BY install_count DESC
+          LIMIT 1 OFFSET max(1, (SELECT count(*) FROM skills) / 10)
+        ), 0)`,
+        p90Trending: sql<number>`coalesce((
+          SELECT trending_score FROM skills ORDER BY trending_score DESC
+          LIMIT 1 OFFSET max(1, (SELECT count(*) FROM skills) / 10)
+        ), 0)`,
+        p90Favorites: sql<number>`coalesce((
+          SELECT favorite_count FROM skills ORDER BY favorite_count DESC
+          LIMIT 1 OFFSET max(1, (SELECT count(*) FROM skills) / 10)
+        ), 0)`,
+      })
+      .from(skills);
+    return stats;
+  });
 
   const results = await getCached(
     env.KV,
-    `leaderboard:page:${sort}:0:${PAGE_SIZE}`,
+    `leaderboard:v2:${sort}:0:${PAGE_SIZE}`,
     300,
     async () => {
       return db
@@ -30,22 +63,41 @@ export async function loader({ request, context }: Route.LoaderArgs) {
           name: skills.name,
           author: skills.author,
           installs: skills.install_count,
-          rating: skills.avg_rating,
+          rating: skills.bayesian_rating,
+          trendingScore: skills.trending_score,
+          favoriteCount: skills.favorite_count,
+          updatedAt: skills.updated_at,
+          bayesianRating: skills.bayesian_rating,
         })
         .from(skills)
         .orderBy(desc(orderCol))
         .limit(PAGE_SIZE + 1);
-    }
+    },
   );
 
   const hasMore = results.length > PAGE_SIZE;
   const entries = (hasMore ? results.slice(0, PAGE_SIZE) : results).map(
-    (e, i) => ({
-      ...e,
-      rank: i + 1,
-      installs: e.installs || 0,
-      rating: e.rating || 0,
-    })
+    (e, i) => {
+      const badges: string[] = [];
+      if ((e.bayesianRating ?? 0) > 8.0) badges.push("top-rated");
+      if ((e.installs ?? 0) >= thresholds.p90Installs && thresholds.p90Installs > 0) badges.push("popular");
+      if ((e.trendingScore ?? 0) >= thresholds.p90Trending && thresholds.p90Trending > 0) badges.push("trending");
+      if (e.updatedAt) {
+        const daysSince = (Date.now() - new Date(e.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince <= 30) badges.push("well-maintained");
+      }
+      if ((e.favoriteCount ?? 0) >= thresholds.p90Favorites && thresholds.p90Favorites > 0) badges.push("community-pick");
+
+      return {
+        rank: i + 1,
+        slug: e.slug,
+        name: e.name,
+        author: e.author,
+        installs: e.installs || 0,
+        rating: e.rating || 0,
+        badges,
+      };
+    },
   );
 
   return { entries, hasMore, sort };
@@ -57,18 +109,16 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
     hasMore: initialHasMore,
     sort,
   } = loaderData;
-  const [activeTab, setActiveTab] = useState("all");
-  const [entries, setEntries] = useState(initialEntries);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>(initialEntries);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [isLoading, setIsLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Refs to avoid stale closures in IntersectionObserver callback
   const loadingRef = useRef(false);
   const hasMoreRef = useRef(initialHasMore);
   const entriesLengthRef = useRef(initialEntries.length);
 
-  // Reset state when loader data changes (sort change via URL navigation)
+  // Reset state when loader data changes (tab change via URL navigation)
   const [prevSort, setPrevSort] = useState(sort);
   if (sort !== prevSort) {
     setPrevSort(sort);
@@ -85,10 +135,10 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
 
     try {
       const res = await fetch(
-        `/api/leaderboard?sort=${sort}&offset=${entriesLengthRef.current}&limit=${PAGE_SIZE}`
+        `/api/leaderboard?sort=${sort}&offset=${entriesLengthRef.current}&limit=${PAGE_SIZE}`,
       );
       const data = (await res.json()) as {
-        entries: typeof initialEntries;
+        entries: LeaderboardEntry[];
         hasMore: boolean;
       };
       setEntries((prev) => {
@@ -106,7 +156,6 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
     }
   }, [sort]);
 
-  // IntersectionObserver triggers loadMore when sentinel enters viewport
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -115,16 +164,16 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
       ([entry]) => {
         if (entry.isIntersecting) loadMore();
       },
-      { rootMargin: "200px" }
+      { rootMargin: "200px" },
     );
 
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [loadMore]);
 
-  const handleSort = (column: string) => {
+  const handleTabChange = (tab: string) => {
     const url = new URL(window.location.href);
-    url.searchParams.set("sort", column === "installs" ? "installs" : "rating");
+    url.searchParams.set("sort", tab);
     window.location.href = url.toString();
   };
 
@@ -132,14 +181,14 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
     <PageContainer>
       <div className="mb-6">
         <h1 className="font-mono text-3xl font-bold">Leaderboard</h1>
-        <p className="mt-2 text-sx-fg-muted">Top rated AI agent skills.</p>
+        <p className="mt-2 text-sx-fg-muted">Top AI agent skills ranked by quality.</p>
       </div>
 
       <div className="mb-6">
-        <FilterTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <FilterTabs activeTab={sort} onTabChange={handleTabChange} />
       </div>
 
-      <LeaderboardTable entries={entries} onSort={handleSort} />
+      <LeaderboardTable entries={entries} />
 
       {/* Infinite scroll sentinel */}
       <div ref={sentinelRef} className="flex justify-center py-8">

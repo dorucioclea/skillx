@@ -1,11 +1,12 @@
 /**
- * Hybrid search orchestrator combining FTS5 keyword search and vector semantic search
- * Uses RRF fusion and quality boost scoring for optimal results
+ * Hybrid search orchestrator combining FTS5 keyword search and vector semantic search.
+ * Uses RRF fusion and 7-signal quality boost scoring for optimal results.
+ * Filters pushed to retrieval stage for efficiency.
  */
 
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq, inArray, and, sql } from 'drizzle-orm';
 import type { Database } from '~/lib/db';
-import { skills, favorites } from '~/lib/db/schema';
+import { skills, favorites, usageStats } from '~/lib/db/schema';
 import { fts5Search } from './fts5-search';
 import { vectorSearch } from './vector-search';
 import { reciprocalRankFusion } from './rrf-fusion';
@@ -41,7 +42,8 @@ export interface SearchResult {
 }
 
 /**
- * Fetch skill stats for boost scoring
+ * Fetch skill stats for boost scoring.
+ * Includes: rating, installs, github_stars, success_rate, updated_at, favorites.
  */
 async function fetchSkillStats(
   db: Database,
@@ -52,37 +54,60 @@ async function fetchSkillStats(
     return new Map();
   }
 
-  // Fetch basic skill data (avg_rating, install_count)
-  const skillData = await db
-    .select({
-      id: skills.id,
-      avg_rating: skills.avg_rating,
-      install_count: skills.install_count,
-    })
-    .from(skills)
-    .where(inArray(skills.id, skillIds));
+  // Fetch skill data with expanded fields for 7-signal boost
+  const [skillData, successRates, favResults] = await Promise.all([
+    db
+      .select({
+        id: skills.id,
+        avg_rating: skills.avg_rating,
+        install_count: skills.install_count,
+        github_stars: skills.github_stars,
+        updated_at: skills.updated_at,
+      })
+      .from(skills)
+      .where(inArray(skills.id, skillIds)),
 
-  // Fetch favorites if user is authenticated
-  let userFavorites = new Set<string>();
-  if (userId) {
-    const favResults = await db
-      .select({ skill_id: favorites.skill_id })
-      .from(favorites)
-      .where(
-        and(
-          eq(favorites.user_id, userId),
-          inArray(favorites.skill_id, skillIds)
-        )
-      );
-    userFavorites = new Set(favResults.map((f) => f.skill_id));
-  }
+    // Compute success_rate per skill from usage_stats
+    db
+      .select({
+        skill_id: usageStats.skill_id,
+        success_rate: sql<number>`
+          CAST(SUM(CASE WHEN ${usageStats.outcome} = 'success' THEN 1 ELSE 0 END) AS REAL)
+          / COUNT(*)
+        `.as('success_rate'),
+      })
+      .from(usageStats)
+      .where(inArray(usageStats.skill_id, skillIds))
+      .groupBy(usageStats.skill_id),
 
-  // Build stats map
+    // Fetch favorites if user is authenticated
+    userId
+      ? db
+          .select({ skill_id: favorites.skill_id })
+          .from(favorites)
+          .where(
+            and(
+              eq(favorites.user_id, userId),
+              inArray(favorites.skill_id, skillIds)
+            )
+          )
+      : Promise.resolve([]),
+  ]);
+
+  const successMap = new Map(
+    successRates.map((r) => [r.skill_id, r.success_rate])
+  );
+  const userFavorites = new Set(favResults.map((f) => f.skill_id));
+
+  // Build stats map with all 7 signals
   const statsMap = new Map<string, SkillStats>();
   for (const skill of skillData) {
     statsMap.set(skill.id, {
       avg_rating: skill.avg_rating || 0,
       usage_count: skill.install_count || 0,
+      github_stars: skill.github_stars || 0,
+      success_rate: successMap.get(skill.id) ?? 0.5,
+      updated_at: skill.updated_at,
       is_favorited: userFavorites.has(skill.id),
     });
   }
@@ -110,7 +135,7 @@ async function fetchSkills(
   for (const skill of skillData) {
     skillMap.set(skill.id, {
       ...skill,
-      final_score: 0, // Will be set by caller
+      final_score: 0,
       rrf_score: 0,
       semantic_rank: null,
       keyword_rank: null,
@@ -121,18 +146,8 @@ async function fetchSkills(
 }
 
 /**
- * Main hybrid search function
- * Combines FTS5 and vector search, applies RRF fusion and quality boost
- *
- * @param db - Drizzle database instance
- * @param d1 - D1 database (for FTS5 raw queries)
- * @param vectorize - Vectorize index binding
- * @param ai - Workers AI binding
- * @param query - Search query string
- * @param filters - Optional category and payment filters
- * @param userId - Optional user ID for personalization
- * @param limit - Maximum results to return (default: 20)
- * @returns Array of search results with full skill data and scores
+ * Main hybrid search function.
+ * Combines FTS5 and vector search with pre-filtering, RRF fusion, and 7-signal boost.
  */
 export async function hybridSearch(
   db: Database,
@@ -149,13 +164,12 @@ export async function hybridSearch(
   }
 
   try {
-    // Run both search methods in parallel
+    // Run both search methods in parallel with pre-filters pushed to retrieval
     const [fts5Results, vectorResults] = await Promise.all([
-      fts5Search(d1, query, limit),
-      vectorSearch(vectorize, ai, query, limit),
+      fts5Search(d1, query, limit, filters),
+      vectorSearch(vectorize, ai, query, limit, filters),
     ]);
 
-    // If both searches return nothing, return empty
     if (fts5Results.length === 0 && vectorResults.length === 0) {
       return [];
     }
@@ -166,19 +180,19 @@ export async function hybridSearch(
       fts5Results.map((r) => ({ skill_id: r.skill_id, rank: r.rank }))
     );
 
-    // Get skill IDs for top results (before boost, to limit data fetching)
-    const topSkillIds = fusedResults.slice(0, limit * 2).map((r) => r.skill_id);
-
-    // Fetch stats for boost scoring
+    // Fetch stats for top candidates (before boost, to limit DB work)
+    const topSkillIds = fusedResults
+      .slice(0, limit * 2)
+      .map((r) => r.skill_id);
     const statsMap = await fetchSkillStats(db, topSkillIds, userId);
 
-    // Apply quality boost
+    // Apply 7-signal quality boost
     const boostedResults = applyBoostScoring(fusedResults, statsMap);
 
-    // Take top N after boosting
-    const finalResultIds = boostedResults.slice(0, limit).map((r) => r.skill_id);
-
-    // Fetch full skill data
+    // Fetch full skill data for top N
+    const finalResultIds = boostedResults
+      .slice(0, limit)
+      .map((r) => r.skill_id);
     const skillsMap = await fetchSkills(db, finalResultIds);
 
     // Combine skill data with scores, maintaining boost order
@@ -196,25 +210,12 @@ export async function hybridSearch(
       }
     }
 
-    // Apply filters if specified
-    let filteredResults = finalResults;
-    if (filters?.category) {
-      filteredResults = filteredResults.filter(
-        (r) => r.category === filters.category
-      );
-    }
-    if (filters?.is_paid !== undefined) {
-      filteredResults = filteredResults.filter(
-        (r) => r.is_paid === filters.is_paid
-      );
-    }
-
-    return filteredResults;
+    return finalResults;
   } catch (error) {
     console.error('Hybrid search error:', error);
     // Fallback to FTS5-only search on error
     try {
-      const fts5Results = await fts5Search(d1, query, limit);
+      const fts5Results = await fts5Search(d1, query, limit, filters);
       const skillIds = fts5Results.map((r) => r.skill_id);
       const skillsMap = await fetchSkills(db, skillIds);
 
@@ -224,7 +225,7 @@ export async function hybridSearch(
           if (!skill) return null;
           return {
             ...skill,
-            final_score: 1 / (60 + r.rank), // Simple RRF-style score
+            final_score: 1 / (60 + r.rank),
             rrf_score: 0,
             semantic_rank: null,
             keyword_rank: r.rank,

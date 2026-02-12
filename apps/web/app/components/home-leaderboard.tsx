@@ -37,7 +37,7 @@ export function HomeLeaderboard({
 
     try {
       const res = await fetch(
-        `/api/leaderboard?sort=installs&offset=${entriesLengthRef.current}&limit=${PAGE_SIZE}`
+        `/api/leaderboard?sort=best&offset=${entriesLengthRef.current}&limit=${PAGE_SIZE}`
       );
       const data = (await res.json()) as {
         entries: LeaderboardEntry[];

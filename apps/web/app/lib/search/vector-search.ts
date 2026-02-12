@@ -1,6 +1,7 @@
 /**
- * Vectorize semantic search module for skill discovery
- * Uses Cloudflare Vectorize with 768-dim embeddings and cosine similarity
+ * Vectorize semantic search module for skill discovery.
+ * Uses Cloudflare Vectorize with 768-dim embeddings and cosine similarity.
+ * Supports pre-filtering by category/is_paid via Vectorize metadata filters.
  */
 
 import { embedTexts } from '~/lib/vectorize/embed-text';
@@ -11,21 +12,28 @@ export interface VectorResult {
   rank: number;
 }
 
+export interface VectorFilters {
+  category?: string;
+  is_paid?: boolean;
+}
+
 /**
- * Search skills using semantic vector similarity
- * Handles chunked skills by deduplicating and taking max score per skill
+ * Search skills using semantic vector similarity.
+ * Handles chunked skills by deduplicating and taking max score per skill.
  *
  * @param vectorize - Vectorize index binding
  * @param ai - Workers AI binding for embeddings
  * @param query - Search query string
  * @param limit - Maximum unique skills to return (default: 20)
+ * @param filters - Optional category/is_paid metadata filters
  * @returns Array of semantic search results with similarity scores
  */
 export async function vectorSearch(
   vectorize: VectorizeIndex,
   ai: Ai,
   query: string,
-  limit = 20
+  limit = 20,
+  filters?: VectorFilters
 ): Promise<VectorResult[]> {
   if (!query.trim()) {
     return [];
@@ -41,11 +49,20 @@ export async function vectorSearch(
       return [];
     }
 
+    // Build Vectorize metadata filter from search filters
+    const vectorFilter: Record<string, string | number> = {};
+    if (filters?.category) {
+      vectorFilter.category = filters.category;
+    }
+    if (filters?.is_paid !== undefined) {
+      vectorFilter.is_paid = filters.is_paid ? 1 : 0;
+    }
+
     // Query Vectorize index with higher limit to account for chunked skills
-    // We'll deduplicate later, so fetch 3x more to ensure enough unique skills
     const vectorResults = await vectorize.query(queryVector, {
       topK: limit * 3,
       returnMetadata: true,
+      ...(Object.keys(vectorFilter).length > 0 && { filter: vectorFilter }),
     });
 
     // Deduplicate by skill_id, keeping the highest similarity score

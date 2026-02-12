@@ -4,10 +4,11 @@ interface FilterTabsProps {
 }
 
 const TABS = [
-  { id: "all", label: "All Time" },
+  { id: "best", label: "Best" },
+  { id: "rating", label: "Top Rated" },
+  { id: "installs", label: "Most Installed" },
   { id: "trending", label: "Trending" },
-  { id: "top", label: "Top Rated" },
-  { id: "new", label: "New" },
+  { id: "newest", label: "Newest" },
 ];
 
 export function FilterTabs({ activeTab, onTabChange }: FilterTabsProps) {

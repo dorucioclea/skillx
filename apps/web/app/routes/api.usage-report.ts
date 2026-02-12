@@ -3,6 +3,7 @@ import { getDb } from "~/lib/db";
 import { skills, usageStats, apiKeys } from "~/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { verifyApiKey } from "~/lib/auth/api-key-utils";
+import { recomputeSkillScores } from "~/lib/leaderboard/recompute-skill-scores";
 
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
@@ -90,6 +91,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
       duration_ms: duration_ms || null,
       created_at: Date.now(),
     });
+
+    // Recompute leaderboard scores
+    await recomputeSkillScores(db, skill.id);
 
     return Response.json({ success: true });
   } catch (error) {

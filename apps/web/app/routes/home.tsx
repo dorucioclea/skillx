@@ -35,18 +35,18 @@ export async function loader({ context }: Route.LoaderArgs) {
     };
   });
 
-  // Get featured skills (top 6 by rating)
+  // Get featured skills (top 6 by composite score)
   const featuredSkills = await db
     .select()
     .from(skills)
-    .orderBy(desc(skills.avg_rating))
+    .orderBy(desc(skills.composite_score))
     .limit(6);
 
-  // Get first page of leaderboard (paginated for infinite scroll)
+  // Get first page of leaderboard sorted by composite score
   const PAGE_SIZE = 20;
   const leaderboardEntries = await getCached(
     env.KV,
-    `leaderboard:page:installs:0:${PAGE_SIZE}`,
+    `leaderboard:home:best:0:${PAGE_SIZE}`,
     300,
     async () => {
       return db
@@ -55,10 +55,10 @@ export async function loader({ context }: Route.LoaderArgs) {
           name: skills.name,
           author: skills.author,
           installs: skills.install_count,
-          rating: skills.avg_rating,
+          rating: skills.bayesian_rating,
         })
         .from(skills)
-        .orderBy(desc(skills.install_count))
+        .orderBy(desc(skills.composite_score))
         .limit(PAGE_SIZE + 1);
     }
   );

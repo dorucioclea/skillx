@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { getDb } from '~/lib/db';
 import { skills } from '~/lib/db/schema';
 import { indexSkill } from '~/lib/vectorize/index-skill';
+import { recomputeSkillScores } from '~/lib/leaderboard/recompute-skill-scores';
 
 interface SkillInput {
   name: string;
@@ -110,9 +111,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
     }
 
+    // Backfill leaderboard scores for all skills
+    const allSkills = await db.select({ id: skills.id }).from(skills);
+    for (const s of allSkills) {
+      await recomputeSkillScores(db, s.id);
+    }
+
     return Response.json({
       skills: skillCount,
       vectors: vectorCount,
+      scoresRecomputed: allSkills.length,
     });
   } catch (error) {
     console.error('Seed error:', error);

@@ -3,6 +3,7 @@ import { getDb } from "~/lib/db";
 import { skills, favorites } from "~/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getSession } from "~/lib/auth/session-helpers";
+import { recomputeSkillScores } from "~/lib/leaderboard/recompute-skill-scores";
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
   try {
@@ -65,6 +66,9 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       });
       favorited = true;
     }
+
+    // Recompute leaderboard scores
+    await recomputeSkillScores(db, skill.id);
 
     return Response.json({ favorited });
   } catch (error) {

@@ -117,8 +117,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch (vectorError) {
       console.error('Vectorize search failed, falling back to FTS5:', vectorError);
 
-      // Fallback to FTS5-only search
-      const fts5Results = await fts5Search(env.DB, body.query, limit);
+      // Fallback to FTS5-only search with filters
+      const fts5Results = await fts5Search(env.DB, body.query, limit, {
+        category: body.category,
+        is_paid: body.is_paid,
+      });
       const skillIds = fts5Results.map((r) => r.skill_id);
 
       // Fetch full skill data
@@ -200,8 +203,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     } catch (vectorError) {
       console.error('Vectorize search failed, falling back to FTS5:', vectorError);
 
-      // Fallback to FTS5-only search
-      const fts5Results = await fts5Search(env.DB, query, limit);
+      // Fallback to FTS5-only search with filters
+      const fts5Results = await fts5Search(env.DB, query, limit, {
+        category,
+        is_paid,
+      });
       const skillIds = fts5Results.map((r) => r.skill_id);
 
       // Fetch full skill data

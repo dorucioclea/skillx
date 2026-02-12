@@ -1,71 +1,42 @@
-import { ArrowUpDown, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Link } from "react-router";
 import { RatingBadge } from "./rating-badge";
+import { SignalBadge } from "./signal-badge";
 
-interface LeaderboardEntry {
+export interface LeaderboardEntry {
   rank: number;
   slug: string;
   name: string;
   author: string;
   installs: number;
   rating: number;
+  badges?: string[];
 }
 
 interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
-  onSort?: (column: string) => void;
 }
 
-export function LeaderboardTable({ entries, onSort }: LeaderboardTableProps) {
+export function LeaderboardTable({ entries }: LeaderboardTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-sx-border">
       <table className="w-full">
         <thead className="sticky top-0 bg-sx-bg-elevated">
           <tr className="border-b border-sx-border">
-            <th className="px-4 py-3 text-left">
-              <button
-                onClick={() => onSort?.("rank")}
-                className="flex items-center gap-1 font-mono text-xs uppercase tracking-wide text-sx-fg-muted hover:text-sx-fg"
-              >
-                Rank
-                <ArrowUpDown size={12} />
-              </button>
+            <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+              Rank
             </th>
-            <th className="px-4 py-3 text-left">
-              <button
-                onClick={() => onSort?.("skill")}
-                className="flex items-center gap-1 font-mono text-xs uppercase tracking-wide text-sx-fg-muted hover:text-sx-fg"
-              >
-                Skill
-                <ArrowUpDown size={12} />
-              </button>
+            <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+              Skill
             </th>
-            <th className="px-4 py-3 text-left">
-              <button
-                onClick={() => onSort?.("author")}
-                className="flex items-center gap-1 font-mono text-xs uppercase tracking-wide text-sx-fg-muted hover:text-sx-fg"
-              >
-                Author
-                <ArrowUpDown size={12} />
-              </button>
+            <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+              Author
             </th>
-            <th className="px-4 py-3 text-left">
-              <button
-                onClick={() => onSort?.("installs")}
-                className="flex items-center gap-1 font-mono text-xs uppercase tracking-wide text-sx-fg-muted hover:text-sx-fg"
-              >
-                Installs
-                <ArrowUpDown size={12} />
-              </button>
+            <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+              Installs
             </th>
-            <th className="px-4 py-3 text-left">
-              <button
-                onClick={() => onSort?.("rating")}
-                className="flex items-center gap-1 font-mono text-xs uppercase tracking-wide text-sx-fg-muted hover:text-sx-fg"
-              >
-                Rating
-                <ArrowUpDown size={12} />
-              </button>
+            <th className="px-4 py-3 text-left font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
+              Rating
             </th>
             <th className="px-4 py-3 text-right font-mono text-xs uppercase tracking-wide text-sx-fg-muted">
               Actions
@@ -96,12 +67,17 @@ export function LeaderboardTable({ entries, onSort }: LeaderboardTableProps) {
                 </span>
               </td>
               <td className="px-4 py-3">
-                <Link
-                  to={`/skills/${entry.slug}`}
-                  className="font-medium text-sx-fg hover:text-sx-accent"
-                >
-                  {entry.name}
-                </Link>
+                <div className="flex flex-wrap items-center">
+                  <Link
+                    to={`/skills/${entry.slug}`}
+                    className="font-medium text-sx-fg hover:text-sx-accent"
+                  >
+                    {entry.name}
+                  </Link>
+                  {entry.badges?.map((b) => (
+                    <SignalBadge key={b} type={b} />
+                  ))}
+                </div>
               </td>
               <td className="px-4 py-3 text-sm text-sx-fg-muted">
                 {entry.author}
