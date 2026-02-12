@@ -8,6 +8,7 @@
     "deploy": "pnpm --filter web deploy",
     "seed": "node scripts/seed-skills.mjs"
   },
+  "packageManager": "pnpm@10.22.0",
   "engines": {
     "node": ">=20"
   },
