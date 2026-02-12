@@ -2,12 +2,10 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
   index("routes/home.tsx"),
-  route("leaderboard", "routes/leaderboard.tsx"),
-  route("search", "routes/search.tsx"),
   route("skills/:slug", "routes/skill-detail.tsx"),
   route("profile", "routes/profile.tsx"),
   route("settings", "routes/settings.tsx"),
-  route("auth/*", "routes/auth-catchall.tsx"),
+  route("api/auth/*", "routes/auth-catchall.tsx"),
   route("api/search", "routes/api.search.ts"),
   route("api/admin/seed", "routes/api.admin.seed.ts"),
   route("api/skills/:slug", "routes/api.skill-detail.ts"),

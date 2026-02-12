@@ -1,6 +1,7 @@
 import type { Route } from "./+types/home";
 import { CommandBox } from "../components/command-box";
 import { SkillCard } from "../components/skill-card";
+import { LeaderboardTable } from "../components/leaderboard-table";
 import { getDb } from "~/lib/db";
 import { skills } from "~/lib/db/schema";
 import { desc, count, sql } from "drizzle-orm";
@@ -41,61 +42,85 @@ export async function loader({ context }: Route.LoaderArgs) {
     .orderBy(desc(skills.avg_rating))
     .limit(6);
 
-  return { stats, featuredSkills };
+  // Get leaderboard entries (top 30 by rating, cached)
+  const leaderboardEntries = await getCached(
+    env.KV,
+    "leaderboard:top",
+    300,
+    async () => {
+      const results = await db
+        .select({
+          slug: skills.slug,
+          name: skills.name,
+          author: skills.author,
+          installs: skills.install_count,
+          rating: skills.avg_rating,
+        })
+        .from(skills)
+        .orderBy(desc(skills.install_count))
+        .limit(30);
+      return results;
+    }
+  );
+
+  const ranked = leaderboardEntries.map((e, i) => ({
+    ...e,
+    rank: i + 1,
+    installs: e.installs || 0,
+    rating: e.rating || 0,
+  }));
+
+  return { stats, featuredSkills, leaderboard: ranked };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { stats, featuredSkills } = loaderData;
+  const { stats, featuredSkills, leaderboard } = loaderData;
 
   return (
-    <div className="flex min-h-[calc(100vh-14rem)] flex-col items-center justify-center px-4">
+    <div className="flex flex-col items-center px-4">
       {/* Hero Section */}
-      <div className="text-center">
-        {/* ASCII Brand */}
+      <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
         <pre className="font-mono text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
           <code className="text-sx-fg">
             SKILL<span className="text-sx-accent">X</span>
           </code>
         </pre>
 
-        {/* Tagline */}
         <p className="mt-4 font-mono text-xs uppercase tracking-wide text-sx-fg-muted sm:text-sm">
           The Skills Marketplace for AI Agents
         </p>
 
-        {/* Description */}
         <p className="mt-6 text-xl text-sx-fg sm:text-2xl">
           The Only Skill That Your AI Agent Needs.
         </p>
 
-        {/* Command Box */}
         <div className="mx-auto mt-8 max-w-lg">
           <CommandBox command='npx skillx search "deploy to cloudflare"' />
         </div>
-      </div>
 
-      {/* Stats Row */}
-      <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
-        <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
-          <div className="font-mono text-3xl font-bold text-sx-accent">
-            {stats.skillCount}+
+        {/* Stats Row */}
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
+          <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
+            <div className="font-mono text-3xl font-bold text-sx-accent">
+              {stats.skillCount}+
+            </div>
+            <div className="mt-1 text-sm text-sx-fg-muted">Total Skills</div>
           </div>
-          <div className="mt-1 text-sm text-sx-fg-muted">Total Skills</div>
-        </div>
-        <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
-          <div className="font-mono text-3xl font-bold text-sx-accent">
-            {formatNumber(stats.installCount)}+
+          <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
+            <div className="font-mono text-3xl font-bold text-sx-accent">
+              {formatNumber(stats.installCount)}+
+            </div>
+            <div className="mt-1 text-sm text-sx-fg-muted">Total Installs</div>
           </div>
-          <div className="mt-1 text-sm text-sx-fg-muted">Total Installs</div>
-        </div>
-        <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
-          <div className="font-mono text-3xl font-bold text-sx-accent">5+</div>
-          <div className="mt-1 text-sm text-sx-fg-muted">Agents Supported</div>
+          <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-6 py-4 text-center">
+            <div className="font-mono text-3xl font-bold text-sx-accent">5+</div>
+            <div className="mt-1 text-sm text-sx-fg-muted">Agents Supported</div>
+          </div>
         </div>
       </div>
 
       {/* Featured Skills */}
-      <div className="mt-16 w-full max-w-4xl">
+      <div className="mt-16 w-full max-w-6xl">
         <h2 className="text-center font-mono text-xl font-bold text-sx-fg">
           Featured Skills
         </h2>
@@ -113,6 +138,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             />
           ))}
         </div>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="mt-16 w-full max-w-6xl pb-16">
+        <h2 className="mb-6 text-center font-mono text-xl font-bold text-sx-fg">
+          Leaderboard
+        </h2>
+        <LeaderboardTable entries={leaderboard} />
       </div>
     </div>
   );

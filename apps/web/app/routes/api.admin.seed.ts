@@ -90,18 +90,21 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
       skillCount++;
 
-      // Index skill in Vectorize
-      const vectors = await indexSkill(env.VECTORIZE, env.AI, {
-        id: skillId,
-        name: skillData.name,
-        description: skillData.description,
-        content: skillData.content,
-        category: skillData.category,
-        is_paid: skillData.is_paid || false,
-        avg_rating: skillData.avg_rating || 0,
-      });
-
-      vectorCount += vectors;
+      // Index skill in Vectorize (skip if not available locally)
+      try {
+        const vectors = await indexSkill(env.VECTORIZE, env.AI, {
+          id: skillId,
+          name: skillData.name,
+          description: skillData.description,
+          content: skillData.content,
+          category: skillData.category,
+          is_paid: skillData.is_paid || false,
+          avg_rating: skillData.avg_rating || 0,
+        });
+        vectorCount += vectors;
+      } catch (vecError) {
+        console.warn(`Vectorize skipped for ${skillData.slug}:`, vecError instanceof Error ? vecError.message : vecError);
+      }
     }
 
     return Response.json({

@@ -1,0 +1,325 @@
+# SkillX Codebase Summary
+
+## Directory Structure
+
+```
+skillx/
+├── apps/
+│   └── web/                           # React + Cloudflare Workers SSR app
+│       ├── app/
+│       │   ├── routes/                # React Router v7 page routes (16 files)
+│       │   ├── components/            # React UI components (14 files)
+│       │   ├── lib/
+│       │   │   ├── db/                # Drizzle ORM schema + database helpers
+│       │   │   ├── auth/              # Better Auth config + session helpers
+│       │   │   ├── search/            # Hybrid search orchestration (5 modules)
+│       │   │   ├── vectorize/         # Embedding indexing (3 modules)
+│       │   │   └── cache/             # KV caching utilities
+│       │   ├── root.tsx               # App shell (navbar, footer)
+│       │   ├── entry.server.tsx       # SSR entry point
+│       │   └── app.css                # Tailwind v4 + @theme tokens
+│       ├── workers/
+│       │   └── app.ts                 # Cloudflare Worker entry + env types
+│       ├── drizzle/
+│       │   └── migrations/            # D1 SQL migration files
+│       ├── public/                    # Static assets
+│       ├── wrangler.jsonc             # Cloudflare bindings config
+│       └── package.json
+├── packages/
+│   └── cli/                           # skillx npm package
+│       ├── src/
+│       │   ├── commands/              # CLI commands (4 files)
+│       │   ├── lib/                   # API client, config store
+│       │   └── index.ts               # Commander.js CLI setup
+│       └── package.json
+├── scripts/
+│   ├── seed-data.json                 # 30 real skills from skills.sh
+│   └── seed-skills.mjs                # Seed script runner
+├── docs/                              # Documentation
+├── plans/                             # Planning & reports
+└── README.md                          # Project overview
+```
+
+## Core Modules Overview
+
+### Web App Routes (apps/web/app/routes)
+
+| Route | Type | LOC | Purpose |
+|-------|------|-----|---------|
+| `home.tsx` | Page | 162 | Hero + stats + featured skills + leaderboard |
+| `skill-detail.tsx` | Page | 184 | Skill page with ratings, reviews, favorites |
+| `leaderboard.tsx` | Page | 78 | Sortable skills table with tier badges |
+| `search.tsx` | Page | 110 | Search results page (uses API) |
+| `profile.tsx` | Page | 115 | User profile + favorite skills |
+| `settings.tsx` | Page | 248 | API key CRUD + usage stats |
+| `auth-catchall.tsx` | Handler | 12 | Better Auth webhook handler |
+| `api.search.ts` | API | 240 | Hybrid search: query → vectorize → rank |
+| `api.skill-detail.ts` | API | 75 | Fetch single skill + ratings |
+| `api.skill-rate.ts` | API | 100 | Create/update rating (0-10) |
+| `api.skill-review.ts` | API | 109 | Create/list reviews |
+| `api.skill-favorite.ts` | API | 74 | Add/remove favorites |
+| `api.usage-report.ts` | API | 99 | Log skill execution outcomes |
+| `api.user-api-keys.ts` | API | 133 | Create/list/revoke API keys |
+| `api.admin.seed.ts` | API | 121 | Load demo seed data |
+| `$.tsx` | Catch-all | 23 | 404 page |
+
+**Total Routes:** ~1,883 LOC
+
+### Components (apps/web/app/components)
+
+| Component | LOC | Purpose |
+|-----------|-----|---------|
+| `layout/navbar.tsx` | 99 | Sticky header with Cmd+K search + auth |
+| `layout/footer.tsx` | 31 | Footer with links |
+| `search-command-palette.tsx` | 189 | Modal palette: debounced search + kbd nav |
+| `leaderboard-table.tsx` | 140 | Sortable table with tier badges + rating |
+| `skill-card.tsx` | 108 | Card: title, rating, installs, category |
+| `search-input.tsx` | 59 | Input field with debounce |
+| `star-rating.tsx` | 69 | Interactive 0-10 rating control |
+| `favorite-button.tsx` | 45 | Heart icon + add/remove logic |
+| `auth-button.tsx` | 41 | GitHub sign in/out |
+| `review-form.tsx` | 65 | Text input for writing reviews |
+| `review-list.tsx` | 60 | Display reviews from DB |
+| `filter-tabs.tsx` | 31 | Category + price filters |
+| `rating-badge.tsx` | 36 | S/A/B/C tier display |
+| `command-box.tsx` | 32 | Copyable code block |
+
+### Database Layer (apps/web/app/lib/db)
+
+**schema.ts** (124 LOC) — Drizzle ORM schema:
+
+| Table | Columns | Purpose |
+|-------|---------|---------|
+| `skills` | id, name, slug, description, content, author, source_url, category, version, is_paid, price_cents, avg_rating, rating_count, install_count, timestamps | Core skill metadata |
+| `ratings` | id, skill_id, user_id, score, is_agent, timestamps | 0-10 scores |
+| `reviews` | id, skill_id, user_id, content, is_agent, created_at | Text feedback |
+| `favorites` | user_id, skill_id, created_at | Many-to-many bookmarks |
+| `usageStats` | id, skill_id, user_id, model, outcome, duration_ms, created_at | Execution tracking |
+| `apiKeys` | id, user_id, name, key_hash, key_prefix, last_used_at, revoked_at, created_at | API authentication |
+
+**Indexes:** 15+ indexes on foreign keys, ratings, avg_rating, created_at, etc.
+
+### Search System (apps/web/app/lib/search)
+
+**Architecture:** Query → Embed → Vectorize + FTS5 → RRF Fusion → Boost Score
+
+| Module | LOC | Function |
+|--------|-----|----------|
+| `hybrid-search.ts` | 239 | Orchestrator: accepts query, returns ranked results |
+| `vector-search.ts` | 83 | Vectorize cosine search (768-dim embeddings) |
+| `fts5-search.ts` | 58 | SQLite FTS5 keyword search |
+| `rrf-fusion.ts` | 79 | Merge vector & FTS results using reciprocal rank fusion |
+| `boost-scoring.ts` | 82 | Adjust scores: avg_rating × 0.3, installs × 0.2, freshness × 0.1 |
+
+**Flow:**
+1. Query (text) → Hash & cache check (KV)
+2. If cached, return cached results (5min TTL)
+3. Otherwise: embed via Workers AI (bge-base-en-v1.5)
+4. Parallel: Vectorize cosine search + FTS5 search
+5. RRF: merge rank lists (v_rank, fts_rank)
+6. Boost: multiply by rating/installs/recency scores
+7. Filter by category, is_paid
+8. Cache results, return top N
+
+### Auth System (apps/web/app/lib/auth)
+
+| Module | Purpose |
+|--------|---------|
+| `auth-server.ts` | Better Auth config + GitHub OAuth provider setup |
+| `auth-client.ts` | React client for sessions (getSession, signIn, signOut) |
+| `session-helpers.ts` | `getSession(request, env)`, `requireAuth()` — request-level auth |
+| `api-key-utils.ts` | Hash/verify API keys (SHA-256), generate prefixes |
+
+**Flow:**
+1. User clicks "Sign in with GitHub"
+2. Better Auth → GitHub OAuth → session cookie (7d expiry)
+3. Routes check: `const session = await getSession(request, env)`
+4. Protected routes: `await requireAuth(session)` → 401 if missing
+
+### Vectorization (apps/web/app/lib/vectorize)
+
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `embed-text.ts` | ? | Call Workers AI to embed text (bge-base-en-v1.5) |
+| `chunk-text.ts` | 30 | Split skill content into 512-token chunks (10% overlap) |
+| `index-skill.ts` | 67 | On skill create: chunk → embed → index in Vectorize |
+
+**Flow:**
+1. Skill created/updated
+2. Extract content (SKILL.md, readme, references)
+3. Chunk into 512-token pieces (10% overlap)
+4. Embed each chunk via Workers AI
+5. Upsert into Vectorize index (namespace: skill_id)
+
+### CLI Package (packages/cli)
+
+| File | LOC | Purpose |
+|------|-----|---------|
+| `index.ts` | - | Commander.js CLI entry + command registration |
+| `commands/search.ts` | 86 | `skillx search "..."` → API call → table output |
+| `commands/use.ts` | 78 | `skillx use skill1 skill2` → fetch SKILL.md, echo to stdout |
+| `commands/report.ts` | 90 | `skillx report` → POST usage metrics to API |
+| `commands/config.ts` | 91 | `skillx config set/get KEY VALUE` → local store |
+| `lib/api-client.ts` | 35 | HTTP client with API key auth |
+| `utils/config-store.ts` | - | conf package: ~/.skillx/config.json |
+
+**Usage:**
+```bash
+npx skillx search "data processing"
+npx skillx use skillx-search skillx-email
+npx skillx config set SKILLX_API_KEY sk_...
+npx skillx report --outcome success --duration 1234
+```
+
+## Data Flow Diagrams (ASCII)
+
+### Search Request Flow
+
+```
+User Query
+    ↓
+[Cmd+K Palette / Search Page]
+    ↓
+POST /api/search { query, category?, is_paid? }
+    ↓
+[Authenticate via session or API key]
+    ↓
+[Check KV cache (5min TTL)]
+    ↓ Cache miss
+[Embed query via Workers AI (bge-base-en-v1.5)]
+    ↓
+┌─────────────────────────────────────┐
+│ Parallel Search                     │
+├─────────────┬───────────────────────┤
+│ Vectorize   │ FTS5 (D1)             │
+│ cosine      │ keyword search        │
+│ search      │                       │
+└─────────────┴───────────────────────┘
+    ↓
+[RRF Fusion: merge rank lists]
+    ↓
+[Boost Scoring: rating × 0.3 + installs × 0.2 + freshness × 0.1]
+    ↓
+[Filter: category, is_paid]
+    ↓
+[Cache result (KV, 5min)]
+    ↓
+Response: { results: [{ id, name, rating, ... }], count }
+```
+
+### API Key Authentication Flow
+
+```
+CLI Request with API key
+    ↓
+Authorization: Bearer sk_1234...abcd
+    ↓
+POST /api/search
+    ↓
+[authenticateRequest: hash key]
+    ↓
+SHA-256(sk_1234...abcd) → hash
+    ↓
+SELECT * FROM apiKeys WHERE key_hash = ?
+    ↓
+Found & revoked_at IS NULL?
+    ↓ Yes
+[Update last_used_at]
+    ↓
+Proceed with request (user_id from apiKeys.user_id)
+    ↓ No
+Return 401 Unauthorized
+```
+
+### Skill Rating Flow
+
+```
+User Rates Skill
+    ↓
+[Star Rating Component: 1-10 score]
+    ↓
+POST /api/skills/:slug/rate { score }
+    ↓
+[Authenticate via session]
+    ↓
+INSERT OR REPLACE INTO ratings (skill_id, user_id, score, ...)
+    ↓
+UPDATE skills SET avg_rating = (SELECT AVG(score) FROM ratings WHERE skill_id = ?), rating_count = (SELECT COUNT(*) FROM ratings WHERE skill_id = ?)
+    ↓
+Response: { id, skill_id, user_id, score }
+```
+
+## Key Implementation Details
+
+### Search Ranking Formula
+
+```
+score = vector_relevance × 0.5 +
+        fts5_relevance × 0.3 +
+        (avg_rating / 10) × 0.3 +
+        log(install_count + 1) × 0.2 +
+        (1 / (days_since_created + 1)) × 0.1
+
+Where:
+- vector_relevance: [0, 1] from Vectorize cosine distance
+- fts5_relevance: [0, 1] from FTS5 rank
+- avg_rating: [0, 10] stored in DB
+- install_count: integer, increases with usage
+- freshness: penalizes old skills
+```
+
+### API Key Format
+
+```
+sk_prod_abc123xyz789abc123...
+
+prefix: "sk_prod" (6 chars)
+secret: random 32 bytes (hex = 64 chars)
+total: 70+ chars
+
+Stored in DB:
+- key_hash: SHA-256(full_key)
+- key_prefix: "sk_prod_abc123xyz789abc123" (first 26 chars)
+```
+
+### Pagination Pattern
+
+All list APIs support:
+- `limit` (default 50, max 100)
+- `offset` (default 0)
+- Returns `count` (total available)
+
+### Session Management
+
+- Better Auth handles session creation
+- Cookie: `auth_token`, httpOnly, secure, sameSite=lax
+- Expiry: 7 days
+- Update age: 1 day (refreshes cookie if active)
+
+---
+
+## Dependencies
+
+**Production:**
+- react-router v7
+- drizzle-orm, drizzle-kit
+- better-auth
+- @cloudflare/workers-types
+- tailwindcss v4
+- lucide-react
+- commander (CLI)
+- chalk (CLI)
+- ora (CLI)
+- conf (CLI config)
+
+**Dev:**
+- vite
+- typescript
+- wrangler (Cloudflare CLI)
+- vitest
+- prettier
+
+---
+
+**Last Updated:** Feb 2025
+**Total LOC:** ~4,500 (excluding auto-generated)

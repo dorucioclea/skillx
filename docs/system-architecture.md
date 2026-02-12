@@ -1,0 +1,370 @@
+# SkillX System Architecture
+
+## High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER INTERFACE LAYER                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Web Browser (React Router v7)    │    CLI (skillx)        │
+│  - Home / Leaderboard              │  - search command           │
+│  - Skill Detail Page               │  - use command              │
+│  - Search (Cmd+K palette)          │  - report command           │
+│  - User Profile                    │  - config command           │
+│  - Settings (API keys)             │                             │
+└──────────────┬──────────────────────────┬───────────────────────┘
+               │                          │
+               │ HTTPS / gRPC             │ HTTPS
+               ↓                          ↓
+┌──────────────────────────────────────────────────────────────────┐
+│           CLOUDFLARE WORKERS (Edge Compute)                      │
+├──────────────────────────────────────────────────────────────────┤
+│  Routes: /, /skills/:slug, /api/*, /auth/*                      │
+│  - Page routes (React Router loaders)                            │
+│  - API handlers (search, rate, review, favorite, report)         │
+│  - Auth handlers (Better Auth middleware)                        │
+└──────────────┬──────────────────────────────────────────────────┘
+               │
+    ┌──────────┼──────────┬────────────┬──────────────┐
+    │          │          │            │              │
+    ↓          ↓          ↓            ↓              ↓
+┌─────────┐ ┌───────┐ ┌──────────┐ ┌──────┐ ┌──────────────┐
+│ D1 DB   │ │  KV   │ │Vectorize │ │ R2   │ │ Workers AI   │
+│ (SQLite)│ │(Cache)│ │(Embeddings)│ │(Assets)│ │(Embeddings)│
+└─────────┘ └───────┘ └──────────┘ └──────┘ └──────────────┘
+```
+
+## Cloudflare Bindings
+
+**wrangler.jsonc configuration:**
+
+| Binding | Service | Purpose |
+|---------|---------|---------|
+| `DB` | D1 Database | Primary data store (SQLite) |
+| `VECTORIZE` | Vectorize Index | Vector search (768-dim) |
+| `KV` | KV Namespace | Query result caching (5min TTL) |
+| `R2` | R2 Bucket | Asset storage (SKILL.md files) |
+| `AI` | Workers AI | Text embedding (bge-base-en-v1.5) |
+
+## Database Schema
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                         SKILLS (Primary Entity)               │
+├──────────────────────────────────────────────────────────────┤
+│ id (PK), slug (unique), name, description, content           │
+│ author, category, version, is_paid, price_cents              │
+│ avg_rating, rating_count, install_count                      │
+│ source_url, created_at, updated_at                           │
+└──────┬──────────────────────┬──────────────────────┬──────────┘
+       │                      │                      │
+       ├─ has many →          ├─ has many →         ├─ has many →
+       ↓                      ↓                      ↓
+┌────────────────┐   ┌──────────────┐    ┌─────────────────┐
+│    RATINGS     │   │   REVIEWS    │    │   FAVORITES     │
+├────────────────┤   ├──────────────┤    ├─────────────────┤
+│ id (PK)        │   │ id (PK)      │    │ user_id (FK)    │
+│ skill_id (FK)  │   │ skill_id (FK)│    │ skill_id (FK)   │
+│ user_id        │   │ user_id      │    │ created_at      │
+│ score (0-10)   │   │ content      │    │ (unique combo)  │
+│ is_agent (bool)│   │ is_agent     │    └─────────────────┘
+│ created_at     │   │ created_at   │
+│ updated_at     │   │              │
+└────────────────┘   └──────────────┘
+
+┌────────────────────────┐    ┌─────────────────────┐
+│    USAGE_STATS         │    │    API_KEYS         │
+├────────────────────────┤    ├─────────────────────┤
+│ id (PK)                │    │ id (PK)             │
+│ skill_id (FK)          │    │ user_id             │
+│ user_id                │    │ name                │
+│ model (Claude/GPT4)    │    │ key_hash (unique)   │
+│ outcome (success/fail) │    │ key_prefix          │
+│ duration_ms            │    │ last_used_at        │
+│ created_at             │    │ revoked_at          │
+└────────────────────────┘    │ created_at          │
+                              └─────────────────────┘
+```
+
+**Indexes:**
+- `idx_skills_category` — Fast category filtering
+- `idx_skills_avg_rating` — Sorting by rating
+- `idx_ratings_skill` — Find ratings for skill
+- `idx_ratings_user_skill` (unique) — Prevent duplicate ratings
+- `idx_api_keys_hash` — Fast API key lookup
+
+## Search Architecture
+
+### 1. Query Processing
+
+```
+User Query (text)
+    ↓
+Hash query string
+    ↓
+Check KV cache: cache:{hash}
+    ↓
+    ├─ Hit (5min TTL) → Return cached results
+    │
+    └─ Miss:
+        ↓
+        Embed query via Workers AI
+        (bge-base-en-v1.5, 768 dimensions)
+        ↓
+        ┌────────────────────────────────────┐
+        │ Parallel Search (no await)         │
+        ├────────────────────────────────────┤
+        │ 1. Vectorize cosine search         │
+        │    - Query embedding vs skill data │
+        │    - Returns top 100 by similarity │
+        │                                    │
+        │ 2. FTS5 keyword search (D1)        │
+        │    - Match skill name/description  │
+        │    - Returns BM25-ranked results   │
+        └────────────────────────────────────┘
+        ↓
+        RRF Fusion: Merge rank lists
+        (reciprocal rank fusion formula)
+        ↓
+        Boost Scoring:
+        - avg_rating × 0.3 (+0.9 if 9/10 star)
+        - install_count × 0.2
+        - freshness × 0.1
+        - favorites boost (+0.1 if favorited)
+        ↓
+        Filter:
+        - category (if specified)
+        - is_paid (if specified)
+        ↓
+        Sort by final score, limit 100
+        ↓
+        Cache result (KV, 5min TTL)
+        ↓
+        Response JSON
+```
+
+### 2. Vectorization Pipeline
+
+```
+Skill Created/Updated
+    ↓
+Extract content from SKILL.md
+    ↓
+Chunk text (512 tokens, 10% overlap)
+    ↓
+For each chunk:
+  ├─ Embed via Workers AI (bge-base-en-v1.5)
+  └─ Upsert into Vectorize index
+        namespace: {skill_id}
+        vector: [768 floats]
+        metadata: { chunk_index, section }
+```
+
+### 3. Hybrid Search Fallback
+
+```
+Normal flow:
+User query → embed + vector search + FTS5 → results
+
+If Vectorize unavailable (dev/error):
+User query → FTS5 only → results
+
+(Graceful degradation enabled for local development)
+```
+
+## Authentication Flow
+
+### Better Auth + GitHub OAuth
+
+```
+┌─────────┐
+│ Browser │
+└────┬────┘
+     │ 1. Click "Sign in with GitHub"
+     ↓
+┌─────────────────────────────────────┐
+│   Cloudflare Worker                 │
+│   /auth/callback (Better Auth)       │
+└────┬────────────────────────────────┘
+     │ 2. Redirect to GitHub OAuth
+     ↓
+┌─────────────────────────────────────┐
+│   GitHub OAuth Server               │
+│   User grants permission             │
+└────┬────────────────────────────────┘
+     │ 3. Authorization code
+     ↓
+┌─────────────────────────────────────┐
+│   Better Auth Handler                │
+│   - Exchange code for token          │
+│   - Fetch user profile from GitHub   │
+│   - Create/update user in D1         │
+│   - Issue session cookie             │
+└────┬────────────────────────────────┘
+     │ 4. Set-Cookie: auth_token=...
+     ↓
+┌─────────┐
+│ Browser │ (cookie stored, httpOnly, secure)
+└─────────┘
+
+Session Cookie Details:
+- Name: auth_token
+- Expiry: 7 days
+- Update age: 1 day (refresh if active)
+- httpOnly: true (JS cannot access)
+- secure: true (HTTPS only)
+- sameSite: lax
+```
+
+### API Key Authentication
+
+```
+CLI: npx skillx search --api-key sk_prod_abc...
+
+Request:
+Authorization: Bearer sk_prod_abc...
+
+Server:
+1. Extract key from Authorization header
+2. Hash via SHA-256
+3. Query: SELECT * FROM api_keys WHERE key_hash = ?
+4. Check: revoked_at IS NULL
+5. Update last_used_at timestamp
+6. Use api_keys.user_id for request context
+
+Response:
+- 401 if key invalid or revoked
+- 200 if valid, proceed with request
+```
+
+## Caching Strategy
+
+### KV Cache Layers
+
+| Key Pattern | TTL | Size | Purpose |
+|-------------|-----|------|---------|
+| `cache:{query_hash}` | 5 min | <25KB | Search results |
+| `user:{userId}` | 1 hour | <10KB | User profile (favorites) |
+| `skill:{skillId}:detail` | 30 min | <20KB | Skill detail page |
+| `leaderboard:top100` | 10 min | <25KB | Leaderboard rankings |
+
+**Cache Invalidation:**
+- On rating/review/favorite write → invalidate skill cache + leaderboard
+- On skill content change → invalidate vectorize index
+
+## API Endpoints
+
+### Public Endpoints
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/` | None | Home page |
+| GET | `/api/search` | Session/Key | Search skills |
+| GET | `/api/skills/:slug` | None | Skill detail (public) |
+
+### Protected Endpoints (Session or API Key)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/skills/:slug/rate` | Submit rating |
+| POST | `/api/skills/:slug/review` | Write review |
+| POST | `/api/skills/:slug/favorite` | Add/remove favorite |
+| POST | `/api/report` | Report usage |
+
+### User Endpoints (Session Only)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/user/api-keys` | List user's API keys |
+| POST | `/api/user/api-keys` | Create new API key |
+| DELETE | `/api/user/api-keys/:id` | Revoke API key |
+| GET | `/api/user/favorites` | List user's favorites |
+
+### Admin Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/admin/seed` | Load demo data (dev only) |
+
+## Deployment Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Cloudflare Global Network                    │
+│         (Anycast routing, auto-scaling)                   │
+├──────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Cloudflare Workers (Edge Compute)                  │  │
+│  │ - Runs React Router v7 SSR app                     │  │
+│  │ - Routes requests to handlers                      │  │
+│  │ - Executes auth, validation, DB queries           │  │
+│  └──────────┬──────────────────────────────────────────┘  │
+│             │                                             │
+│  ┌──────────┴──────────────────────────────────────────┐  │
+│  │ Cloudflare D1 (SQLite Database)                    │  │
+│  │ - Primary data store                               │  │
+│  │ - Geo-replicated (3x copies)                       │  │
+│  │ - Atomic transactions                              │  │
+│  │ - FTS5 extension enabled                           │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                           │
+│  ┌──────────┬────────────────┬────────────────────────┐  │
+│  │          │                │                        │  │
+│  ↓          ↓                ↓                        ↓  │
+│ ┌──────┐ ┌────────┐ ┌──────────────┐ ┌──────────────┐│
+│ │  KV  │ │Vectorize│ │   Workers AI │ │     R2      ││
+│ │Cache │ │Embedding│ │(Embeddings) │ │   Storage   ││
+│ │      │ │Index    │ │             │ │             ││
+│ └──────┘ └────────┘ └──────────────┘ └──────────────┘│
+│                                                       │
+└──────────────────────────────────────────────────────┘
+```
+
+## Security Architecture
+
+### Network Security
+- TLS 1.3 (Cloudflare default)
+- DDoS protection (Cloudflare)
+- WAF rules enabled
+- Rate limiting: 100 req/min per IP
+
+### Application Security
+- API key hashing (SHA-256)
+- Session cookie (httpOnly, secure, sameSite)
+- CORS enabled for trusted origins
+- SQL injection prevention (Drizzle ORM)
+- XSS protection (React escapes by default)
+
+### Data Security
+- D1 encryption at rest
+- KV encryption at rest
+- R2 encryption at rest
+- No plaintext API keys stored
+- Audit logging for sensitive operations
+
+## Performance Characteristics
+
+| Operation | Latency | Notes |
+|-----------|---------|-------|
+| Skill search | 200-800ms | Vectorize + FTS5, cached |
+| Leaderboard | 100-500ms | D1 query, sorted by rating |
+| Rate skill | 100-300ms | D1 insert + update |
+| API key lookup | 50-150ms | D1 hash index |
+| Page load (FCP) | <2s | React Router SSR |
+| Vector embedding | 100-200ms | Workers AI via Cloudflare |
+
+## Disaster Recovery
+
+| Scenario | Recovery |
+|----------|----------|
+| Vectorize unavailable | Switch to FTS5-only search |
+| D1 replica down | Automatic failover (3x replicas) |
+| Cache miss (KV) | Recompute & recache |
+| Worker crash | Cloudflare auto-restart |
+| Data corruption | D1 point-in-time restore |
+
+---
+
+**Last Updated:** Feb 2025
+**Version:** 1.0
