@@ -17,6 +17,7 @@ interface SkillInput {
   price_cents?: number;
   avg_rating?: number;
   rating_count?: number;
+  github_stars?: number;
   install_count?: number;
 }
 
@@ -64,6 +65,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           price_cents: skillData.price_cents || 0,
           avg_rating: skillData.avg_rating || 0,
           rating_count: skillData.rating_count || 0,
+          github_stars: skillData.github_stars || 0,
           install_count: skillData.install_count || 0,
           created_at: now,
           updated_at: now,
@@ -83,6 +85,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
             price_cents: skillData.price_cents || 0,
             avg_rating: skillData.avg_rating || 0,
             rating_count: skillData.rating_count || 0,
+            github_stars: skillData.github_stars || 0,
             install_count: skillData.install_count || 0,
             updated_at: now,
           },

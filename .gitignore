@@ -28,6 +28,8 @@ worker-configuration.d.ts
 # Scraper
 scripts/scrape-progress.json
 scripts/scraped-skills.json
+scripts/.fetch-progress.json
+scripts/.seed-progress.json
 
 # OS
 Thumbs.db

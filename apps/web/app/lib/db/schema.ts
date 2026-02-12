@@ -18,6 +18,7 @@ export const skills = sqliteTable(
     price_cents: integer("price_cents").default(0),
     avg_rating: real("avg_rating").default(0),
     rating_count: integer("rating_count").default(0),
+    github_stars: integer("github_stars").default(0),
     install_count: integer("install_count").default(0),
     created_at: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updated_at: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
