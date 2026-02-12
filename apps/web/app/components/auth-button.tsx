@@ -3,6 +3,16 @@ import { signIn, signOut, useSession } from "~/lib/auth/auth-client";
 export function AuthButton() {
   const { data: session, isPending } = useSession();
 
+  const handleSignIn = async () => {
+    const result = await signIn.social({
+      provider: "github",
+      callbackURL: "/",
+    });
+    if (result.error) {
+      console.error("Sign-in error:", result.error);
+    }
+  };
+
   if (isPending) {
     return (
       <button
@@ -32,7 +42,7 @@ export function AuthButton() {
 
   return (
     <button
-      onClick={() => signIn.social({ provider: "github" })}
+      onClick={handleSignIn}
       className="rounded-lg bg-sx-accent px-4 py-2 text-sm text-white hover:bg-sx-accent-hover"
     >
       Sign In with GitHub
