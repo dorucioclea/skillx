@@ -7,11 +7,12 @@
   "observability": {
     "enabled": true
   },
+  // Custom domains configured via Cloudflare dashboard (skillx.sh, www.skillx.sh)
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "skillx-db",
-      "database_id": "local",
+      "database_id": "cc79aa75-f43d-47c3-b1f8-b0317a547144",
       "migrations_dir": "drizzle/migrations"
     }
   ],
@@ -24,7 +25,7 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "local"
+      "id": "3d4594dc42124efdad7aba2da677ffac"
     }
   ],
   "r2_buckets": [
@@ -37,6 +38,6 @@
     "binding": "AI"
   },
   "vars": {
-    "ENVIRONMENT": "development"
+    "ENVIRONMENT": "production"
   }
 }
