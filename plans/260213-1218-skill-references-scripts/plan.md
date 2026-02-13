@@ -43,6 +43,10 @@ Enrich SkillX skills with **references** (markdown docs indexed in Vectorize for
 - Phase 4 → unlocks Phase 5, 6 (UI/CLI consume API)
 - Phase 5 and 6 can run in parallel
 
+## Cross-Plan Dependencies
+
+**[Leaderboard Enhancements plan](../260213-1558-leaderboard-enhancements/plan.md)** also adds a D1 migration and columns to `skills` table. No code conflicts — different columns (`upvote_count`/`downvote_count`/`net_votes` vs `scripts`/`fts_content`). Migration numbering: this plan = `0006`, leaderboard plan = `0007`. The leaderboard plan also modifies scoring files (`boost-scoring.ts`, `leaderboard-scoring.ts`) which this plan does NOT touch.
+
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |

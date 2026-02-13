@@ -82,40 +82,38 @@ MVP launched with all foundational features:
 
 **Status:** Planned
 **Duration:** 7-9 weeks
-**Goals:** MCP server mode, skill marketplace discovery, sandbox execution, references & scripts
+**Goals:** Leaderboard enhancements, skill references & scripts, MCP server, sandbox execution
 
 ### Milestones
 
-#### 3.1 MCP Server Implementation (Weeks 1-3)
-- [ ] Design MCP protocol for skill discovery
-- [ ] Implement MCP server in CLI tool
-- [ ] `skillx-mcp-server` package
-- [ ] Claude integration via MCP
-- [ ] Skill result formatting (JSON/markdown)
+> **Implementation order:** Ready-to-implement plans first (3.1, 3.2), then features with external dependencies (3.3-3.6).
 
-Example usage:
-```bash
-npx skillx-mcp-server
-# Server listens on stdio
-# Claude makes requests: { method: 'tools/call', name: 'search', args: { query } }
-```
+#### 3.1 Leaderboard Enhancements (Weeks 1-2) — NEXT UP
+**Implementation plan:** [plans/260213-1558-leaderboard-enhancements/plan.md](../plans/260213-1558-leaderboard-enhancements/plan.md)
+**Status:** Plan complete (red-teamed + validated), ready to implement
+**Why first:** No external dependencies, high user impact, uses migration `0007`
 
-#### 3.2 Skill Execution Sandbox (Weeks 3-5)
-- [ ] Research: Deno Deploy, AWS Lambda, or Cloudflare Workers
-- [ ] Design execution environment (timeouts, resource limits)
-- [ ] Implement skill runner (fetch SKILL.md, parse commands)
-- [ ] Output capture (stdout, stderr, exit code)
-- [ ] Security: sandboxing, env var isolation
+4 phases: DB + Vote API → Sort/Filter/Preview → Favorites/Votes UI → Scoring updates
 
-#### 3.3 Skillmark Integration (Weeks 5-6)
-- [ ] Fetch radar charts from Skillmark.sh API
-- [ ] Embed in skill detail page
-- [ ] Cache radar charts (30 min TTL)
-- [ ] Display skill verification badge
+Key decisions (validated):
+- Reddit-style votes (up/down/none) coexist with 0-10 ratings
+- Votes as 8th search signal (7%, RRF reduced 50%→43%)
+- Votes as 7th leaderboard signal (10%, rating 35%→30%, installs 25%→20%)
+- Sort tabs (5 modes) + category filter dropdown
+- Author links to GitHub profile (with username validation)
+- Preview modal (description, category, stats)
+- Client-side overlay for per-user vote/favorite state
+- DB-based rate limiting (10 votes/min per user)
 
-#### 3.4 Skill References & Scripts (Weeks 6-7)
+- [ ] Phase 1: Database migration (`votes` table + skills columns) + Vote API
+- [ ] Phase 2: Sort/filter controls + clickable author + preview modal
+- [ ] Phase 3: Favorites button + vote arrows + auth overlay
+- [ ] Phase 4: Scoring algorithm updates + bulk recompute
+
+#### 3.2 Skill References & Scripts (Weeks 2-4)
 **Implementation plan:** [plans/260213-1218-skill-references-scripts/plan.md](../plans/260213-1218-skill-references-scripts/plan.md)
 **Status:** Plan complete (red-teamed + validated), ready to implement
+**Why second:** Ready to implement, uses migration `0006` (order-independent with 3.1), depends on GitHub API
 
 6 phases: DB migration → GitHub fetcher → Seed pipeline → API updates → UI → CLI
 
@@ -132,7 +130,34 @@ Key decisions (validated):
 - [ ] Phase 5: UI skill detail page (references + scripts sections)
 - [ ] Phase 6: CLI updates (`--include-refs`, `--include-scripts` for raw mode)
 
-#### 3.5 Skill Publishing Workflow (Weeks 7-9)
+#### 3.3 MCP Server Implementation (Weeks 4-6)
+- [ ] Design MCP protocol for skill discovery
+- [ ] Implement MCP server in CLI tool
+- [ ] `skillx-mcp-server` package
+- [ ] Claude integration via MCP
+- [ ] Skill result formatting (JSON/markdown)
+
+Example usage:
+```bash
+npx skillx-mcp-server
+# Server listens on stdio
+# Claude makes requests: { method: 'tools/call', name: 'search', args: { query } }
+```
+
+#### 3.4 Skillmark Integration (Weeks 6-7)
+- [ ] Fetch radar charts from Skillmark.sh API
+- [ ] Embed in skill detail page
+- [ ] Cache radar charts (30 min TTL)
+- [ ] Display skill verification badge
+
+#### 3.5 Skill Execution Sandbox (Weeks 7-8)
+- [ ] Research: Deno Deploy, AWS Lambda, or Cloudflare Workers
+- [ ] Design execution environment (timeouts, resource limits)
+- [ ] Implement skill runner (fetch SKILL.md, parse commands)
+- [ ] Output capture (stdout, stderr, exit code)
+- [ ] Security: sandboxing, env var isolation
+
+#### 3.6 Skill Publishing Workflow (Weeks 8-9)
 - [ ] Creator dashboard (publish new skill)
 - [ ] SKILL.md validation
 - [ ] Auto-generate skill card
@@ -146,6 +171,9 @@ Key decisions (validated):
 - [ ] Radar charts loading & caching
 - [ ] References & scripts displayed on skill detail pages
 - [ ] CLI `skillx info` shows references & scripts
+- [ ] Leaderboard sort/filter/preview working
+- [ ] Vote system functional with rate limiting
+- [ ] Scoring algorithm updated with vote signal
 
 ---
 
@@ -266,5 +294,5 @@ Jan 2025    Feb 2025    Mar 2025    Apr 2025    May 2025
 
 ---
 
-**Last Updated:** Feb 2025
+**Last Updated:** Feb 13, 2026
 **Next Review:** Feb 20, 2025
