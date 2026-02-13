@@ -4,6 +4,36 @@ import { skills, ratings, reviews, favorites } from "~/lib/db/schema";
 import { eq, desc, count, avg } from "drizzle-orm";
 import { getSession } from "~/lib/auth/session-helpers";
 
+/** Detect stub content: short + ends with "## Author\n{author}" */
+function isStubContent(content: string, author: string): boolean {
+  return content.length < 300 && content.trimEnd().endsWith(`## Author\n${author}`);
+}
+
+/** Derive raw SKILL.md URL from a GitHub source_url like
+ *  https://github.com/{owner}/{repo}/tree/{branch}/{path} */
+function toRawSkillMdUrl(sourceUrl: string): string | null {
+  const m = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.*)/);
+  if (!m) return null;
+  return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}/SKILL.md`;
+}
+
+/** Fetch real SKILL.md content from GitHub. Returns null on failure. */
+async function fetchRealContent(sourceUrl: string): Promise<string | null> {
+  const rawUrl = toRawSkillMdUrl(sourceUrl);
+  if (!rawUrl) return null;
+
+  try {
+    const res = await fetch(rawUrl, {
+      headers: { "User-Agent": "SkillX/1.0" },
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.trim().length > 20 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   try {
     const slug = params.slug;
@@ -23,6 +53,19 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
 
     if (!skill) {
       return Response.json({ error: "Skill not found" }, { status: 404 });
+    }
+
+    // Lazy content fetch: if DB has stub content, pull real SKILL.md from GitHub
+    if (skill.source_url && isStubContent(skill.content, skill.author)) {
+      const realContent = await fetchRealContent(skill.source_url);
+      if (realContent) {
+        skill.content = realContent;
+        // Persist to DB so future requests are fast (fire-and-forget)
+        db.update(skills)
+          .set({ content: realContent, updated_at: new Date() })
+          .where(eq(skills.id, skill.id))
+          .catch(() => {});
+      }
     }
 
     // Fetch reviews with limit
