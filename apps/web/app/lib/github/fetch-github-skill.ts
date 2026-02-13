@@ -1,6 +1,7 @@
 /**
  * Fetch skill data from a public GitHub repository.
- * Tries SKILL.md → CLAUDE.md → README.md for content.
+ * Supports root-level skills (whole repo) and subfolder skills (skill_path).
+ * Tries SKILL.md -> CLAUDE.md -> README.md for content.
  * Uses GitHub REST API (unauthenticated — rate-limited to 60 req/hr/IP).
  */
 
@@ -55,8 +56,8 @@ function inferCategory(topics: string[]): string {
   return "general";
 }
 
-/** Content files to try, in priority order */
-const CONTENT_FILES = ["SKILL.md", "CLAUDE.md", "README.md"];
+/** Content files to try at root level, in priority order */
+const ROOT_CONTENT_FILES = ["SKILL.md", "CLAUDE.md", "README.md"];
 
 /**
  * Fetch raw file content from GitHub repo's default branch.
@@ -74,13 +75,40 @@ async function fetchRepoFile(
   return res.text();
 }
 
+/** Extract first paragraph from markdown as description */
+function extractDescription(content: string): string {
+  const lines = content.split("\n");
+  const paragraphs: string[] = [];
+  let current = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("#")) continue; // skip headings
+    if (trimmed === "") {
+      if (current) {
+        paragraphs.push(current.trim());
+        current = "";
+      }
+      continue;
+    }
+    current += (current ? " " : "") + trimmed;
+  }
+  if (current) paragraphs.push(current.trim());
+
+  return paragraphs[0] || "";
+}
+
 /**
  * Fetch skill data from a public GitHub repo.
+ * @param owner - GitHub org/user
+ * @param repo - Repository name
+ * @param skillPath - Optional subfolder path (e.g. ".claude/skills/ui-ux-pro-max")
  * @throws Error if repo not found or not accessible.
  */
 export async function fetchGitHubSkill(
   owner: string,
   repo: string,
+  skillPath?: string,
 ): Promise<GitHubSkillData> {
   // Fetch repo metadata
   const repoRes = await fetch(
@@ -99,16 +127,66 @@ export async function fetchGitHubSkill(
   }
 
   const repoData = (await repoRes.json()) as GitHubRepoResponse;
+  const branch = repoData.default_branch;
 
-  // Fetch content: try SKILL.md → CLAUDE.md → README.md
+  // Determine skill name and content based on whether skillPath is provided
+  if (skillPath) {
+    return fetchSubfolderSkill(owner, repo, repoData, branch, skillPath);
+  }
+
+  return fetchRootSkill(owner, repo, repoData, branch);
+}
+
+/** Fetch a skill from a subfolder within the repo */
+async function fetchSubfolderSkill(
+  owner: string,
+  repo: string,
+  repoData: GitHubRepoResponse,
+  branch: string,
+  skillPath: string,
+): Promise<GitHubSkillData> {
+  const skillName = skillPath.includes("/")
+    ? skillPath.substring(skillPath.lastIndexOf("/") + 1)
+    : skillPath;
+
+  // Try SKILL.md in the subfolder
+  const content = await fetchRepoFile(owner, repo, branch, `${skillPath}/SKILL.md`);
+
+  if (!content) {
+    throw new Error(`No SKILL.md found at ${owner}/${repo}/${skillPath}`);
+  }
+
+  const slug = `${owner}-${skillName}`.toLowerCase();
+  const description = extractDescription(content) || `${skillName} skill from ${owner}/${repo}`;
+  const sourceUrl = `${repoData.html_url}/tree/${branch}/${skillPath}`;
+
+  return {
+    name: skillName,
+    slug,
+    description,
+    content,
+    author: repoData.owner.login,
+    source_url: sourceUrl,
+    category: inferCategory(repoData.topics || []),
+    install_command: `npx skillx-sh use ${owner}/${repo}/${skillName}`,
+    github_stars: repoData.stargazers_count,
+  };
+}
+
+/** Fetch a skill from the repo root (whole repo = one skill) */
+async function fetchRootSkill(
+  owner: string,
+  repo: string,
+  repoData: GitHubRepoResponse,
+  branch: string,
+): Promise<GitHubSkillData> {
   let content: string | null = null;
-  for (const file of CONTENT_FILES) {
-    content = await fetchRepoFile(owner, repo, repoData.default_branch, file);
+  for (const file of ROOT_CONTENT_FILES) {
+    content = await fetchRepoFile(owner, repo, branch, file);
     if (content) break;
   }
 
   if (!content) {
-    // Fallback: use description as content
     content = repoData.description || `# ${repoData.name}\n\nNo skill documentation found.`;
   }
 
