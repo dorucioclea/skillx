@@ -81,7 +81,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex flex-col items-center px-4">
       {/* Hero Section */}
-      <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center pt-8 text-center">
         <pre className="font-mono text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
           <code className="text-sx-fg">
             SKILL<span className="text-sx-accent">X</span>

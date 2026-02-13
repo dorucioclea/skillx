@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router";
 
 const TABS = [
   { to: "/docs", label: "CLI Guide" },
+  { to: "/docs/agents", label: "Coding Agents Guide" },
   { to: "/docs/api", label: "API Reference" },
 ] as const;
 

@@ -48,7 +48,7 @@ export function SearchInput({ defaultValue = "", onSubmit }: SearchInputProps) {
           name="q"
           defaultValue={defaultValue}
           placeholder="Search skills..."
-          className="w-full rounded-lg border border-sx-border bg-sx-bg-elevated py-3 pl-11 pr-16 font-mono text-sm text-sx-fg placeholder:text-sx-fg-muted focus:border-sx-accent focus:outline-none focus:ring-2 focus:ring-sx-accent-muted"
+          className="w-full rounded-lg border border-sx-border bg-sx-bg-elevated py-3 pl-11 pr-16 font-mono text-sm text-sx-fg placeholder:text-sx-fg-muted focus:border-sx-accent focus:outline-none"
         />
         <kbd className="absolute right-4 rounded border border-sx-border bg-sx-bg px-2 py-0.5 font-mono text-xs text-sx-fg-subtle">
           /

@@ -4,7 +4,16 @@
 
 SkillX.sh — AI agent skills marketplace. Web marketplace + CLI + hybrid search engine. "The Only Skill That Your AI Agent Needs."
 
+**Related documents:**
+- Project initial brief: `./docs/project-initial-brief.md`
+- Project overview: `./docs/project-overview-pdr.md`
+- Project roadmap: `./docs/project-roadmap-pdr.md`
+- Design guidelines: `./docs/design-guidelines.md`
+
 ## Tech Stack
+
+Code standards: `./docs/code-standards.md`
+Codebase summary: `./docs/codebase-summary.md`
 
 - **Monorepo**: pnpm workspaces (`apps/web`, `packages/cli`)
 - **Web**: React Router v7 + Vite + SSR on Cloudflare Workers
@@ -91,6 +100,9 @@ Plus Better Auth tables: `user`, `session`, `account`, `verification`
 
 ## Key Patterns
 
+System architecture: `./docs/system-architecture.md`
+Search algorithm: `./docs/search-algorithm.md`
+
 **Page routes**: Loader (server-side data) + Component (React) + Action (form handling)
 
 **API routes**: Auth check → Validate input → DB operation → JSON response
@@ -113,6 +125,10 @@ Plus Better Auth tables: `user`, `session`, `account`, `verification`
 - **Env vars** in `apps/web/.dev.vars` (local) or Cloudflare Secrets (production). Never commit `.dev.vars`.
 - **Max 200 LOC per file** — split into focused modules if exceeded.
 - **Seed data** in `scripts/seed-data.json` (30 real skills from skills.sh). Seed via `ADMIN_SECRET=... pnpm seed`.
+
+## Deployment
+
+Read here: `./docs/deployment-guide.md`
 
 ## Cloudflare Bindings (wrangler.jsonc)
 
