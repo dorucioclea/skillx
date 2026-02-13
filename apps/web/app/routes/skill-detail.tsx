@@ -79,7 +79,12 @@ export default function SkillDetail() {
     );
   };
 
-  const installCmd = data.skill.install_command || `npx skillx-sh use ${data.skill.slug}`;
+  // Derive author/skill-name identifier for CLI use command
+  const skillNamePart = data.skill.slug.startsWith(`${data.skill.author}-`)
+    ? data.skill.slug.slice(data.skill.author.length + 1) : data.skill.slug;
+  const useId = `${data.skill.author}/${skillNamePart}`;
+  // Only show third-party install if it's a different tool (e.g., "npx skills add ...")
+  const thirdPartyCmd = data.skill.install_command?.includes('skillx-sh') ? null : data.skill.install_command;
 
   return (
     <PageContainer>
@@ -113,9 +118,23 @@ export default function SkillDetail() {
             )}
           </div>
 
-          {/* Install command card */}
-          <div className="mb-8">
-            <CommandBox command={installCmd} />
+          {/* Use this skill */}
+          <div className="mb-8 space-y-3">
+            <p className="text-xs font-medium uppercase tracking-wider text-sx-fg-subtle">Use this skill</p>
+            <CommandBox command={`npx skillx-sh use ${useId}`} />
+            <p className="text-xs text-sx-fg-muted">or</p>
+            <div className="rounded-lg border border-sx-border bg-sx-bg-elevated px-4 py-3 font-mono text-sm leading-relaxed">
+              <p className="text-sx-fg-subtle"># Install SkillX</p>
+              <p className="text-sx-fg">npm i -g skillx-sh</p>
+              <p className="mt-1 text-sx-fg-subtle"># Use the skill</p>
+              <p className="text-sx-fg">skillx use {useId}</p>
+            </div>
+            {thirdPartyCmd && (
+              <>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wider text-sx-fg-subtle">Or install it (OPTIONAL):</p>
+                <CommandBox command={thirdPartyCmd} />
+              </>
+            )}
           </div>
 
           {/* SKILL.md label */}
