@@ -38,19 +38,23 @@ skillx find "testing"
 
 ### `skillx use <identifier>`
 
-Smart skill lookup — auto-detects whether you're using a slug, GitHub repo, or keyword search.
+Smart skill lookup — supports multiple identifier formats:
 
 ```bash
-skillx use owner/repo          # direct lookup, auto-registers from GitHub if new
-skillx use "ui ux design"      # keyword search, auto-picks top result
-skillx use my-skill            # exact slug lookup (fallback to search on 404)
-skillx use my-skill --raw      # output raw content (for piping)
+skillx use author/skill-name              # direct lookup by author and skill name
+skillx use org/repo/skill-name            # lookup or auto-register from GitHub repo subfolder
+skillx use org/repo                       # scan GitHub repo for all skills (discovers SKILL.md files)
+skillx use slug                           # exact slug lookup (fallback to search on 404)
+skillx use "keyword query"                # search and auto-pick top result
+skillx use author/skill-name --raw        # output raw content (for piping)
+skillx use something --search             # force search mode
 ```
 
 **How it works:**
-- `org/repo` format → fetches directly, auto-registers + indexes in Vectorize if not in DB
-- Multi-word query → searches and uses the top result
-- Single-word slug → tries direct lookup, falls back to search if not found
+- `author/skill` (two-part) → DB lookup by slug `author-skill`, fallback scan repo
+- `org/repo/skill` (three-part) → DB lookup `org-skill`, fallback register from GitHub subfolder
+- Single word → direct slug lookup, falls back to search if not found
+- Multi-word or `--search` flag → searches and uses the top result
 
 ### `skillx report <slug> <outcome>`
 

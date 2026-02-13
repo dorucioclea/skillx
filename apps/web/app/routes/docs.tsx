@@ -91,11 +91,12 @@ export default function Docs() {
 
           <CommandEntry
             icon={<Terminal size={18} />}
-            name="skillx use <slug>"
-            description="View full details of a skill including description, rating, install command, and content preview."
-            example="skillx use better-auth"
+            name="skillx use <identifier>"
+            description="Smart skill lookup — supports author/skill, org/repo/skill, slug, or keyword search. Auto-registers from GitHub if not found."
+            example="skillx use alinaqi/code-review"
             flags={[
               { flag: "-r, --raw", desc: "Output raw content only (for piping to files)" },
+              { flag: "-s, --search", desc: "Force search mode regardless of identifier format" },
             ]}
           />
 
