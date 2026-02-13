@@ -189,17 +189,11 @@ function displaySkill(skill: SkillDetails, displayId: string, options: { raw: bo
     console.log();
   }
 
-  console.log(chalk.bold('Content Preview:'));
+  console.log(chalk.bold('Content:'));
   console.log(chalk.dim('─'.repeat(80)));
-  const preview = skill.content.split('\n').slice(0, 30).join('\n');
-  console.log(preview);
-
-  if (skill.content.split('\n').length > 30) {
-    console.log(chalk.dim('\n... (content truncated)'));
-  }
-
-  console.log(chalk.dim('\n' + '─'.repeat(80)));
-  console.log(chalk.dim(`\nUse ${chalk.cyan(`skillx use ${displayId} --raw`)} to output full content`));
+  console.log(skill.content);
+  console.log(chalk.dim('─'.repeat(80)));
+  console.log(chalk.dim(`\nUse ${chalk.cyan(`skillx use ${displayId} --raw`)} to output raw content (for piping)`));
   console.log(chalk.dim(`View online at: ${chalk.underline(`https://skillx.sh/skills/${skill.slug}`)}`));
 }
 
