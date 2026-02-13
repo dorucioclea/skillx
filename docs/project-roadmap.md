@@ -114,17 +114,23 @@ npx skillx-mcp-server
 - [ ] Display skill verification badge
 
 #### 3.4 Skill References & Scripts (Weeks 6-7)
-- [ ] Add `references` JSON column to skills table (array of `{title, url, type}`)
-- [ ] Add `scripts` JSON column to skills table (array of `{name, command, description}`)
-- [ ] D1 migration (ALTER TABLE, not recreate)
-- [ ] Update seed pipeline to fetch/store references & scripts from SkillsMP
-- [ ] API: return references & scripts in skill detail endpoint
-- [ ] API: allow creators to CRUD references & scripts on their skills
-- [ ] UI: render references list on skill detail page (with icons by type: docs, repo, api, video)
-- [ ] UI: render scripts section with copy-to-clipboard buttons
-- [ ] CLI: `skillx info <slug>` shows references & scripts
-- [ ] Search: index reference titles in FTS5 for keyword discoverability
-- [ ] Validation: sanitize URLs, limit array size (max 20 refs, 10 scripts)
+**Implementation plan:** [plans/260213-1218-skill-references-scripts/plan.md](../plans/260213-1218-skill-references-scripts/plan.md)
+**Status:** Plan complete (red-teamed + validated), ready to implement
+
+6 phases: DB migration → GitHub fetcher → Seed pipeline → API updates → UI → CLI
+
+Key decisions (validated):
+- References: full content in `skill_references` table, Vectorize titles+first-paragraph only (~200K vectors)
+- Scripts: metadata JSON column on skills table, agent-mediated execution
+- FTS5: separate `fts_content` computed column (content + ref titles)
+- Rollout: top 50 skills first → 500 → full
+
+- [ ] Phase 1: DB schema migration (`scripts`, `fts_content` columns + `skill_references` table)
+- [ ] Phase 2: GitHub fetcher script (Trees API, `--top-n=50`, progressive)
+- [ ] Phase 3: Seed pipeline + Vectorize integration
+- [ ] Phase 4: API & search updates (detail endpoint returns refs/scripts)
+- [ ] Phase 5: UI skill detail page (references + scripts sections)
+- [ ] Phase 6: CLI updates (`--include-refs`, `--include-scripts` for raw mode)
 
 #### 3.5 Skill Publishing Workflow (Weeks 7-9)
 - [ ] Creator dashboard (publish new skill)
