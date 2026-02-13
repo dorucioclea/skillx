@@ -36,6 +36,7 @@ apps/web/app/
 ├── lib/
 │   ├── db/              # schema.ts (Drizzle), queries
 │   ├── auth/            # auth-server.ts, session-helpers.ts, api-key-utils.ts
+│   ├── github/          # fetch-github-skill, scan-github-repo (Tree API)
 │   ├── search/          # hybrid-search, vector-search, fts5-search, rrf-fusion, boost-scoring
 │   ├── vectorize/       # embed-text, chunk-text, index-skill
 │   └── cache/           # KV caching utilities
@@ -80,6 +81,7 @@ pnpm db:migrate:remote    # Apply migrations to remote D1
 | `/api/skills/:slug/install` | api.skill-install.ts | Optional (API key or X-Device-Id) |
 | `/api/report` | api.usage-report.ts | Session/Key |
 | `/api/user/api-keys` | api.user-api-keys.ts | Session |
+| `/api/skills/register` | api.skill-register.ts | None |
 | `/api/admin/seed` | api.admin.seed.ts | Admin secret |
 
 ## Database Tables (Drizzle schema)
@@ -96,6 +98,10 @@ Plus Better Auth tables: `user`, `session`, `account`, `verification`
 **Auth**: `getSession(request, env)` for session, `requireAuth(request, env)` for redirect
 
 **Search**: Query → Embed (Workers AI) → Vectorize + FTS5 parallel → RRF fusion → Boost scoring → Filter → Cache (KV)
+
+**CLI `skillx use` resolution**: `author/skill` (two-part → DB slug `author-skill`) | `org/repo/skill` (three-part → DB slug `org-skill`, fallback register from GitHub) | `slug` (direct lookup, fallback search) | `"keywords"` (search mode)
+
+**Register API**: POST `/api/skills/register` with `{ owner, repo, skill_path?, scan? }`. Modes: single skill (`skill_path`), scan all SKILL.md files (`scan: true`), or backward-compat fallback (try root, then scan).
 
 **Styling**: Always dark theme. Use `bg-slate-900`, `text-white`, `text-mint`, `border-mint/20`. Geist Sans/Mono fonts. Lucide icons.
 
