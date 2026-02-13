@@ -1,10 +1,12 @@
 /**
  * FTS5 (Full-Text Search) module for keyword-based search.
  * Uses SQLite FTS5 virtual table with weighted BM25 ranking (name 10x, desc 5x, content 1x).
- * Supports pre-filtering by category/is_paid and prefix matching for autocomplete.
+ * Supports pre-filtering by category/is_paid and OR-based prefix matching.
+ *
+ * NOTE: D1 FTS5 does not support parenthesized OR groups combined with implicit AND
+ * (e.g. "(a OR b) c" silently fails). We use OR-joined prefix terms instead.
+ * Semantic matching (abbreviations, synonyms) is handled by vector search.
  */
-
-import { expandAliases } from './query-aliases';
 
 export interface FTS5Result {
   skill_id: string;
@@ -17,24 +19,17 @@ export interface FTS5Filters {
   is_paid?: boolean;
 }
 
-/** Convert query terms to FTS5 prefix-match format.
- *  Preserves OR/AND operators and parentheses from alias expansion.
- *  Example: "deploy tool" → "deploy* tool*"
- *  Example: "(kubernetes OR k8s) deploy" → "(kubernetes* OR k8s*) deploy*" */
-function toPrefixQuery(query: string): string {
+/** Convert user query to FTS5 OR-joined prefix query.
+ *  Each term gets a prefix wildcard and all terms are OR-joined
+ *  so partial matches on any term return results.
+ *  Example: "ui ux" → "ui* OR ux*"
+ *  Example: "deploy tool" → "deploy* OR tool*" */
+function toFts5Query(query: string): string {
   return query
     .split(/\s+/)
     .filter(Boolean)
-    .map((token) => {
-      // Don't add * to FTS5 boolean operators
-      if (token === 'OR' || token === 'AND' || token === 'NOT') return token;
-      // Handle opening paren: "(term" → "(term*"
-      if (token.startsWith('(')) return `(${token.slice(1)}*`;
-      // Handle closing paren: "term)" → "term*)"
-      if (token.endsWith(')')) return `${token.slice(0, -1)}*)`;
-      return `${token}*`;
-    })
-    .join(' ');
+    .map((term) => `${term}*`)
+    .join(' OR ');
 }
 
 /**
@@ -61,9 +56,8 @@ export async function fts5Search(
   }
 
   try {
-    // Expand aliases (k8s→kubernetes, etc.) then add prefix wildcards
-    const aliasExpanded = expandAliases(sanitized);
-    const matchQuery = toPrefixQuery(aliasExpanded);
+    // OR-joined prefix query — vector search handles semantic expansion
+    const matchQuery = toFts5Query(sanitized);
 
     // Build dynamic SQL with optional pre-filters
     let sql = `

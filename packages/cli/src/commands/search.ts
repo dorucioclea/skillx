@@ -1,64 +1,55 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { apiRequest, ApiError } from '../lib/api-client.js';
-
-interface SearchResult {
-  slug: string;
-  name: string;
-  category: string;
-  rating: number;
-  description: string;
-}
-
-interface SearchResponse {
-  results: SearchResult[];
-  total: number;
-}
+import { ApiError } from '../lib/api-client.js';
+import { searchSkills } from '../lib/search-api.js';
+import { useSkillBySlug } from './use.js';
 
 export const searchCommand = new Command('search')
   .description('Search for skills in the SkillX marketplace')
   .argument('<query>', 'Search query')
-  .action(async (query: string) => {
+  .option('-u, --use', 'Auto-pick the top result and show its details')
+  .action(async (query: string, options: { use?: boolean }) => {
     const spinner = ora('Searching for skills...').start();
 
     try {
-      const response = await apiRequest<SearchResponse>('/api/search', {
-        method: 'POST',
-        body: JSON.stringify({ query }),
-      });
-
+      const results = await searchSkills(query);
       spinner.stop();
 
-      if (!response.results || response.results.length === 0) {
+      if (results.length === 0) {
         console.log(chalk.yellow('\nNo skills found matching your query.'));
         console.log(chalk.dim('Try different search terms or browse all skills at https://skillx.sh'));
         return;
       }
 
-      console.log(chalk.bold.green(`\n✓ Found ${response.total} skill(s)\n`));
+      // --use flag: auto-pick top result and show details
+      if (options.use) {
+        const top = results[0];
+        console.log(chalk.dim(`Top result for "${query}": ${chalk.cyan(`${top.author}/${top.name}`)}\n`));
+        await useSkillBySlug(`${top.author}/${top.name}`, { raw: false });
+        return;
+      }
 
-      const colWidths = {
-        name: 25,
-        category: 15,
-        rating: 8,
-        description: 50,
-      };
+      console.log(chalk.bold.green(`\n✓ Found ${results.length} skill(s)\n`));
+
+      const colWidths = { skill: 40, category: 15, rating: 8, description: 40 };
 
       console.log(
         chalk.bold(
-          `${padRight('NAME', colWidths.name)} ${padRight('CATEGORY', colWidths.category)} ${padRight('RATING', colWidths.rating)} DESCRIPTION`
+          `${padRight('SKILL', colWidths.skill)} ${padRight('CATEGORY', colWidths.category)} ${padRight('RATING', colWidths.rating)} DESCRIPTION`
         )
       );
-      console.log(chalk.dim('─'.repeat(100)));
+      console.log(chalk.dim('─'.repeat(105)));
 
-      response.results.forEach((skill) => {
-        const nameCol = chalk.cyan(padRight(skill.name, colWidths.name));
+      results.forEach((skill) => {
+        const displayId = `${skill.author}/${skill.name}`;
+        const skillCol = chalk.cyan(padRight(displayId, colWidths.skill));
         const categoryCol = chalk.magenta(padRight(skill.category, colWidths.category));
-        const ratingCol = chalk.yellow(padRight(`⭐ ${skill.rating.toFixed(1)}`, colWidths.rating));
+        const rating = skill.avg_rating ?? 0;
+        const ratingCol = chalk.yellow(padRight(`⭐ ${rating.toFixed(1)}`, colWidths.rating));
         const descCol = truncate(skill.description, colWidths.description);
 
-        console.log(`${nameCol} ${categoryCol} ${ratingCol} ${descCol}`);
+        console.log(`${skillCol} ${categoryCol} ${ratingCol} ${descCol}`);
       });
 
       console.log(chalk.dim(`\nUse ${chalk.cyan('skillx use <slug>')} to view and install a skill`));

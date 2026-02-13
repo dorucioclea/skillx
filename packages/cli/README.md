@@ -25,6 +25,7 @@ Search the SkillX marketplace for skills.
 ```bash
 skillx search "code review"
 skillx search "database migration"
+skillx search "ui ux" --use     # auto-pick top result and show details
 ```
 
 ### `skillx find <query>`
@@ -35,15 +36,21 @@ Interactive search — browse results and select a skill to view details.
 skillx find "testing"
 ```
 
-### `skillx use <slug>`
+### `skillx use <identifier>`
 
-View a skill's details and content. Supports GitHub `org/repo` format — if the skill isn't registered yet, it auto-registers from the repo.
+Smart skill lookup — auto-detects whether you're using a slug, GitHub repo, or keyword search.
 
 ```bash
-skillx use my-skill
-skillx use owner/repo          # auto-registers from GitHub
+skillx use owner/repo          # direct lookup, auto-registers from GitHub if new
+skillx use "ui ux design"      # keyword search, auto-picks top result
+skillx use my-skill            # exact slug lookup (fallback to search on 404)
 skillx use my-skill --raw      # output raw content (for piping)
 ```
+
+**How it works:**
+- `org/repo` format → fetches directly, auto-registers + indexes in Vectorize if not in DB
+- Multi-word query → searches and uses the top result
+- Single-word slug → tries direct lookup, falls back to search if not found
 
 ### `skillx report <slug> <outcome>`
 

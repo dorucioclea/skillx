@@ -145,6 +145,7 @@ export function SearchCommandPalette({ open, onClose }: SearchCommandPaletteProp
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">{result.name}</span>
+                      <span className="shrink-0 text-xs text-sx-fg-subtle">by {result.author}</span>
                       <span className="shrink-0 rounded bg-sx-bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-sx-fg-muted">
                         {result.category}
                       </span>
