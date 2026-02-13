@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { ApiError } from '../lib/api-client.js';
 import { searchSkills } from '../lib/search-api.js';
-import { useSkillBySlug } from './use.js';
+import { resolveAndUseSkill } from './use.js';
 
 export const searchCommand = new Command('search')
   .description('Search for skills in the SkillX marketplace')
@@ -26,7 +26,7 @@ export const searchCommand = new Command('search')
       if (options.use) {
         const top = results[0];
         console.log(chalk.dim(`Top result for "${query}": ${chalk.cyan(`${top.author}/${top.name}`)}\n`));
-        await useSkillBySlug(`${top.author}/${top.name}`, { raw: false });
+        await resolveAndUseSkill(`${top.author}/${top.name}`, { raw: false });
         return;
       }
 
