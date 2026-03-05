@@ -53,7 +53,7 @@ apps/web/app/
 └── app.css              # Tailwind + theme tokens
 
 packages/cli/src/        # `skillx` npm package
-├── commands/            # search, use, report, config
+├── commands/            # search, use, publish, report, config
 ├── lib/                 # api-client, config-store
 └── index.ts             # Commander.js entry
 ```
@@ -65,6 +65,8 @@ pnpm install              # Install all dependencies
 pnpm dev                  # Start dev server (apps/web) → http://localhost:5173
 pnpm build                # Build for production
 pnpm typecheck            # TypeScript check
+pnpm test                 # Run unit tests (vitest) once
+pnpm test:watch           # Run unit tests in watch mode
 pnpm seed                 # Seed DB (requires ADMIN_SECRET env var)
 
 # Inside apps/web:
@@ -88,14 +90,16 @@ pnpm db:migrate:remote    # Apply migrations to remote D1
 | `/api/skills/:slug/review` | api.skill-review.ts | Session/Key |
 | `/api/skills/:slug/favorite` | api.skill-favorite.ts | Session/Key |
 | `/api/skills/:slug/install` | api.skill-install.ts | Optional (API key or X-Device-Id) |
+| `/api/skills/:slug/vote` | api.skill-vote.ts | Session |
 | `/api/report` | api.usage-report.ts | Session/Key |
 | `/api/user/api-keys` | api.user-api-keys.ts | Session |
+| `/api/user/interactions` | api.user-interactions.ts | Session (graceful fallback) |
 | `/api/skills/register` | api.skill-register.ts | Session/Key |
 | `/api/admin/seed` | api.admin.seed.ts | Admin secret |
 
 ## Database Tables (Drizzle schema)
 
-`skills`, `ratings`, `reviews`, `favorites`, `usageStats`, `apiKeys`, `installs`
+`skills`, `ratings`, `reviews`, `favorites`, `votes`, `usageStats`, `apiKeys`, `installs`
 Plus Better Auth tables: `user`, `session`, `account`, `verification`
 
 ## Key Patterns
@@ -109,7 +113,11 @@ Search algorithm: `./docs/search-algorithm.md`
 
 **Auth**: `getSession(request, env)` for session, `requireAuth(request, env)` for redirect
 
-**Search**: Query → Embed (Workers AI) → Vectorize + FTS5 parallel → RRF fusion → Boost scoring → Filter → Cache (KV)
+**Search**: Query → Embed (Workers AI) → Vectorize + FTS5 parallel → RRF fusion → 8-signal Boost scoring (RRF 43%, rating 15%, stars 10%, usage 8%, success 7%, votes 7%, recency 5%, favorites 5%) → Filter → Cache (KV)
+
+**Leaderboard**: 7-signal composite scoring (rating 30%, installs 20%, stars 15%, votes 10%, success 10%, recency 10%, favorites 5%). Sort tabs (best/rating/installs/trending/newest), category filter, preview modal. Client-side interaction overlay (votes + favorites) on KV-cached data.
+
+**Vote API**: POST `/api/skills/:slug/vote` with `{ type: 'up'|'down'|'none' }`. Rate limited 10 votes/min per user. Atomic count update via SQL subquery.
 
 **CLI `skillx use` resolution**: `author/skill` (two-part → DB slug `author-skill`) | `org/repo/skill` (three-part → DB slug `org-skill`, fallback register from GitHub) | `slug` (direct lookup, fallback search) | `"keywords"` (search mode)
 
