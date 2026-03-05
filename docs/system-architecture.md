@@ -299,7 +299,9 @@ Response:
 |--------|------|---------|
 | POST | `/api/admin/seed` | Load demo data (dev only) |
 
-## Skill Registration (Publish) API
+## Skill Registration & Content Scanning
+
+### Register API
 
 **Endpoint:** `POST /api/skills/register`
 
@@ -318,8 +320,36 @@ Response:
 **Validation:**
 - User must authenticate (API key or session)
 - GitHub repo ownership verified (write access required)
+- Content scanned & sanitized before DB insert
 - Scans repo for SKILL.md files at specified path or root
 - Falls back to repo-wide scan if single skill not found
+
+### Content Security Scanning
+
+```
+Skill content (SKILL.md)
+    ↓
+[scanContent: detect patterns]
+    ├─ DANGER: invisible Unicode, ANSI escapes, prompt injection,
+    │          javascript: URLs, shell injection → risk_label = "danger"
+    │
+    ├─ CAUTION: script/iframe/form tags, URL shorteners, base64 blocks,
+    │           XML-style tags (2+ matches) → risk_label = "caution"
+    │
+    └─ else → risk_label = "safe"
+    ↓
+[sanitizeContent: remove zero-width chars & ANSI escapes]
+    ↓
+INSERT INTO skills (content, risk_label, ...) VALUES (sanitized_content, label, ...)
+    ↓
+Lazy-fetch (skill-detail API) also scans + sanitizes before returning
+```
+
+**Risk Labels:**
+- **"safe"** — No dangerous patterns detected
+- **"caution"** — Multiple suspicious patterns (warnings shown to users)
+- **"danger"** — Prompt injection or injection vectors detected (strong warnings)
+- **"unknown"** — Not yet scanned (legacy data)
 
 **Response (single skill):**
 ```json
