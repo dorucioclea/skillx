@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { getDb } from "~/lib/db";
 import { skills, ratings, reviews, favorites } from "~/lib/db/schema";
-import { eq, desc, count, avg } from "drizzle-orm";
+import { eq, desc, count, avg, and } from "drizzle-orm";
+import { fetchSkillReferences } from "~/lib/db/skill-detail-queries";
 import { getSession } from "~/lib/auth/session-helpers";
 import { scanContent, sanitizeContent } from "~/lib/security/content-scanner";
 
@@ -73,6 +74,17 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       }
     }
 
+    // Fetch references (metadata only) — shared query
+    const refs = await fetchSkillReferences(db, skill.id);
+
+    // Parse scripts JSON
+    let parsedScripts: Array<{ name: string; command: string; url: string }> = [];
+    if (skill.scripts) {
+      try { parsedScripts = JSON.parse(skill.scripts); } catch (e) {
+        console.warn(`Invalid scripts JSON for ${slug}:`, e instanceof Error ? e.message : e);
+      }
+    }
+
     // Fetch reviews with limit
     const skillReviews = await db
       .select()
@@ -98,8 +110,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       const [favorite] = await db
         .select()
         .from(favorites)
-        .where(eq(favorites.user_id, session.user.id))
-        .where(eq(favorites.skill_id, skill.id))
+        .where(and(eq(favorites.user_id, session.user.id), eq(favorites.skill_id, skill.id)))
         .limit(1);
       isFavorited = !!favorite;
     }
@@ -112,6 +123,8 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
         avgRating: ratingData?.avgRating || 0,
         ratingCount: ratingData?.ratingCount || 0,
       },
+      references: refs,
+      scripts: parsedScripts,
     });
   } catch (error) {
     console.error("Error fetching skill detail:", error);

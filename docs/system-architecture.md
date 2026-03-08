@@ -55,24 +55,25 @@
 │ id (PK), slug (unique), name, description, content           │
 │ author, category, version, is_paid, price_cents              │
 │ avg_rating, rating_count, install_count                      │
-│ upvote_count, downvote_count, net_votes (NEW)                │
+│ upvote_count, downvote_count, net_votes                      │
+│ scripts (JSON), fts_content (computed for FTS5)              │
 │ source_url, created_at, updated_at                           │
-└──────┬──────────────────────┬──────────────────────┬──────────┘
-       │                      │                      │
-       ├─ has many →          ├─ has many →         ├─ has many → ├─ has many →
-       ↓                      ↓                      ↓              ↓
-┌────────────────┐   ┌──────────────┐    ┌─────────────────┐ ┌──────────────┐
-│    RATINGS     │   │   REVIEWS    │    │   FAVORITES     │ │    VOTES     │
-├────────────────┤   ├──────────────┤    ├─────────────────┤ ├──────────────┤
-│ id (PK)        │   │ id (PK)      │    │ user_id (FK)    │ │ id (PK)      │
-│ skill_id (FK)  │   │ skill_id (FK)│    │ skill_id (FK)   │ │ skill_id (FK)│
-│ user_id        │   │ user_id      │    │ created_at      │ │ user_id (FK) │
-│ score (0-10)   │   │ content      │    │ (unique combo)  │ │ direction    │
-│ is_agent (bool)│   │ is_agent     │    └─────────────────┘ │ (up/down)    │
-│ created_at     │   │ created_at   │                        │ created_at   │
-│ updated_at     │   │              │                        │ updated_at   │
-└────────────────┘   └──────────────┘                        │(unique combo)│
-                                                             └──────────────┘
+└──────┬──────────────────────┬──────────────────────┬──────────┬───────────┘
+       │                      │                      │          │
+       ├─ has many →          ├─ has many →         ├─ many →  ├─ many →
+       ↓                      ↓                      ↓          ↓
+┌────────────────┐   ┌──────────────┐    ┌────────────────┐ ┌──────────────┐
+│    RATINGS     │   │   REVIEWS    │    │  REFERENCES    │ │    VOTES     │
+├────────────────┤   ├──────────────┤    ├────────────────┤ ├──────────────┤
+│ id (PK)        │   │ id (PK)      │    │ id (PK)        │ │ id (PK)      │
+│ skill_id (FK)  │   │ skill_id (FK)│    │ skill_id (FK)  │ │ skill_id (FK)│
+│ user_id        │   │ user_id      │    │ title          │ │ user_id (FK) │
+│ score (0-10)   │   │ content      │    │ filename       │ │ direction    │
+│ is_agent (bool)│   │ is_agent     │    │ url            │ │ (up/down)    │
+│ created_at     │   │ created_at   │    │ type (enum)    │ │ created_at   │
+│ updated_at     │   │              │    │ content        │ │ updated_at   │
+└────────────────┘   └──────────────┘    │ created_at     │ │(unique combo)│
+                                         └────────────────┘ └──────────────┘
 
 ┌────────────────────────┐    ┌─────────────────────┐
 │    USAGE_STATS         │    │    API_KEYS         │
@@ -102,11 +103,12 @@
 **Indexes:**
 - `idx_skills_category` — Fast category filtering
 - `idx_skills_avg_rating` — Sorting by rating
-- `idx_skills_net_votes` — Sorting by votes (NEW)
+- `idx_skills_net_votes` — Sorting by votes
 - `idx_ratings_skill` — Find ratings for skill
 - `idx_ratings_user_skill` (unique) — Prevent duplicate ratings
-- `idx_votes_skill` — Find votes for skill (NEW)
-- `idx_votes_user_skill` (unique) — Prevent duplicate votes per user (NEW)
+- `idx_votes_skill` — Find votes for skill
+- `idx_votes_user_skill` (unique) — Prevent duplicate votes per user
+- `idx_references_skill` — Find references for skill (NEW)
 - `idx_api_keys_hash` — Fast API key lookup
 
 ## Search Architecture
@@ -167,7 +169,7 @@ Check KV cache: cache:{hash}
 ```
 Skill Created/Updated
     ↓
-Extract content from SKILL.md
+Extract content from SKILL.md + references + scripts
     ↓
 Chunk text (512 tokens, 10% overlap)
     ↓
@@ -177,6 +179,17 @@ For each chunk:
         namespace: {skill_id}
         vector: [768 floats]
         metadata: { chunk_index, section }
+
+Reference Added (NEW)
+    ↓
+Extract reference title + first paragraph
+    ↓
+Embed via Workers AI
+    ↓
+Upsert into Vectorize index
+     namespace: {skill_id}_refs
+     vector: [768 floats]
+     metadata: { reference_id, type }
 ```
 
 ### 3. Hybrid Search Fallback
@@ -202,13 +215,19 @@ score = (avg_rating / 10) × 0.30 +
         (review_count / 50) × 0.05 +
         (is_verified × 0.05)
 
-Sorting: By composite score (default), net_votes, avg_rating, or install_count
-Filters: Category, risk_label, is_paid, date_range (configurable)
+Sorting tabs (5 modes):
+- best: composite score (default)
+- rating: avg_rating descending
+- installs: install_count descending
+- trending: net_votes descending (recent)
+- newest: created_at descending
+
+Filters: Category, risk_label (safe/caution/danger/unknown), is_paid, date_range (configurable)
 
 Where:
-- avg_rating: [0, 10] — user ratings
-- install_count: integer — skill usage
-- net_votes: upvote_count - downvote_count (community feedback)
+- avg_rating: [0, 10] — user ratings (0-10 scale)
+- install_count: integer — skill usage tracking
+- net_votes: upvote_count - downvote_count (community feedback via votes)
 - rating_count: total ratings received
 - freshness: newer skills ranked higher
 - review_count: number of text reviews
@@ -303,8 +322,9 @@ Response:
 |--------|------|------|---------|
 | GET | `/` | None | Home page |
 | GET | `/api/search` | Session/Key | Search skills |
-| GET | `/api/leaderboard` | None | Leaderboard with sorting & category filter (NEW) |
-| GET | `/api/skills/:slug` | None | Skill detail (public) |
+| GET | `/api/leaderboard` | None | Leaderboard with sorting & category filter |
+| GET | `/api/skills/:slug` | None | Skill detail + references + scripts (public) |
+| GET | `/api/skills/:slug/references` | None | List skill references (NEW) |
 
 ### Protected Endpoints (Session or API Key)
 
@@ -313,8 +333,9 @@ Response:
 | POST | `/api/skills/:slug/rate` | Submit rating |
 | POST | `/api/skills/:slug/review` | Write review |
 | POST | `/api/skills/:slug/favorite` | Add/remove favorite |
-| POST | `/api/skills/:slug/vote` | Upvote/downvote skill (NEW) |
+| POST | `/api/skills/:slug/vote` | Upvote/downvote skill |
 | POST | `/api/skills/:slug/install` | Track install (fire-and-forget) |
+| POST | `/api/skills/:slug/references` | Add reference to skill (NEW) |
 | POST | `/api/skills/register` | Register/publish skills from GitHub repo (validates write access) |
 | POST | `/api/report` | Report usage |
 
@@ -367,7 +388,80 @@ Check existing vote: SELECT * FROM votes WHERE user_id = ? AND skill_id = ?
 - Negative votes penalize skills but don't remove them
 
 
-## Skill Registration & Content Scanning
+## Skill References & Scripts
+
+### References Management (NEW)
+
+**Adding a Reference:**
+
+```
+POST /api/skills/:slug/references
+{ title, filename, url, type: "doc"|"link"|"example", content? }
+    ↓
+[Authenticate: session or API key]
+    ↓
+INSERT INTO skill_references (skill_id, title, filename, url, type, content, ...)
+    ↓
+[Optionally: index in Vectorize (title + first 100 tokens of content)]
+    ↓
+Response: { id, skill_id, title, url, type, created_at }
+```
+
+**Retrieving References:**
+
+```
+GET /api/skills/:slug/references
+    ↓
+SELECT * FROM skill_references WHERE skill_id = ? ORDER BY created_at DESC
+    ↓
+Response: [{ id, title, filename, url, type, created_at }, ...]
+```
+
+**On Skill Detail Page:**
+
+- Show References section with metadata + links
+- Support: documentation (title + link), external links, code examples
+- Reference type enum: "doc" | "link" | "example"
+
+### Scripts Management (NEW)
+
+**Scripts Field:**
+
+- Stored as JSON array in `skills.scripts` column
+- Schema: `[{ name: string, description?: string, language?: string, url?: string }, ...]`
+- Extracted from SKILL.md frontmatter or metadata block
+- Indexed for Vectorize search (script names + descriptions)
+
+**CLI Usage:**
+
+```bash
+skillx use skill-name --include-scripts
+skillx use skill-name --include-refs --include-scripts
+```
+
+**API Response (skill detail):**
+
+```json
+{
+  "skill": { ... },
+  "references": [
+    { "id": 1, "title": "Docs", "url": "...", "type": "doc" },
+    ...
+  ],
+  "scripts": [
+    { "name": "main", "description": "Entry point", "language": "python" },
+    { "name": "helper", "language": "js" }
+  ]
+}
+```
+
+**On Skill Detail Page:**
+
+- Show Scripts section with names, descriptions, language badges
+- Link to source URLs if provided
+- Expandable code preview if content available
+
+## Skill Registration, Publishing & Content Scanning
 
 ### Register API
 
@@ -387,10 +481,34 @@ Check existing vote: SELECT * FROM votes WHERE user_id = ? AND skill_id = ?
 
 **Validation:**
 - User must authenticate (API key or session)
-- GitHub repo ownership verified (write access required)
+- GitHub repo ownership verified (write access via collaborator API check)
 - Content scanned & sanitized before DB insert
 - Scans repo for SKILL.md files at specified path or root
 - Falls back to repo-wide scan if single skill not found
+- Lazy-fetch: full content fetched on demand (skill-detail API)
+
+### CLI Publish Command
+
+**Command:** `skillx publish [owner/repo]`
+
+**Modes:**
+- `skillx publish owner/repo` — Auto-detect single SKILL.md or scan all
+- `skillx publish owner/repo --path path/to/skill` — Specific skill path
+- `skillx publish owner/repo --scan` — Force full repo scan
+- `skillx publish --dry-run` — Validation only (requires auth)
+
+**Authentication:** Requires API key (stored in `~/.skillx/config.json`)
+
+**Workflow:**
+1. Parse owner/repo from command argument
+2. Validate authentication
+3. Fetch user's GitHub access token from Better Auth `account` table
+4. Check collaborator status on target repo via GitHub API
+5. Scan repo for SKILL.md files (top 50, then 500, then all)
+6. Extract metadata (name, description, author, etc.)
+7. Sanitize & scan content for security risks
+8. POST to `/api/skills/register` with auth token
+9. Return slug or error
 
 ### Content Security Scanning
 
@@ -569,5 +687,6 @@ User sees skillx-marketplace with 2 plugins
 
 ---
 
-**Last Updated:** Feb 2025
-**Version:** 1.0
+**Last Updated:** Mar 5, 2026
+**Version:** 1.1
+**Recent Additions:** Voting system, skill references/scripts, CLI publish command, GitHub ownership verification, content security scanning, lazy-fetch skill detail API
